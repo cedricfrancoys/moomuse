@@ -4,406 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Media Explorer Prototype</title>
-  <style>
-    :root {
-      --bg: #0f1115;
-      --panel: #171a21;
-      --panel-2: #1e2430;
-      --border: #2b3342;
-      --text: #e7ecf3;
-      --muted: #9aa6b2;
-      --accent: #4da3ff;
-      --accent-2: #77d0a8;
-      --danger: #ff7b72;
-      --hover: #222a38;
-      --selected: #23324a;
-      --shadow: 0 10px 30px rgba(0,0,0,.25);
-      --radius: 12px;
-      --font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: var(--font);
-      background: linear-gradient(180deg, #0d1015 0%, #121722 100%);
-      color: var(--text);
-      min-height: 100vh;
-    }
-
-    .app {
-      display: grid;
-      grid-template-columns: 280px 1fr 360px;
-      grid-template-rows: auto 1fr auto;
-      grid-template-areas:
-        "sidebar toolbar player"
-        "sidebar content player"
-        "statusbar statusbar statusbar";
-      min-height: 100vh;
-    }
-
-    .sidebar, .toolbar, .content, .player, .statusbar {
-      border-color: var(--border);
-    }
-
-    .sidebar {
-      grid-area: sidebar;
-      border-right: 1px solid var(--border);
-      background: rgba(23, 26, 33, 0.94);
-      padding: 16px;
-      overflow: auto;
-    }
-
-    .toolbar {
-      grid-area: toolbar;
-      border-bottom: 1px solid var(--border);
-      background: rgba(23, 26, 33, 0.94);
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .content {
-      grid-area: content;
-      padding: 16px;
-      overflow: auto;
-    }
-
-    #directoriesList:not(:empty) + #filesList {
-        margin-top: 12px;
-    }
-
-    .player {
-      grid-area: player;
-      border-left: 1px solid var(--border);
-      background: rgba(23, 26, 33, 0.94);
-      padding: 16px;
-      overflow: auto;
-    }
-
-    .statusbar {
-      grid-area: statusbar;
-      border-top: 1px solid var(--border);
-      background: #0f131b;
-      color: var(--muted);
-      padding: 8px 14px;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    h1, h2, h3, p { margin: 0; }
-
-    .section-title {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-
-    .brand {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-bottom: 18px;
-    }
-
-    .brand h1 {
-      font-size: 20px;
-      font-weight: 700;
-    }
-
-    .brand p {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.4;
-    }
-
-    .input, .button, .select {
-      background: var(--panel-2);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font: inherit;
-    }
-
-    .input {
-      min-width: 240px;
-      flex: 1;
-    }
-
-    .button {
-      cursor: pointer;
-      transition: .15s ease;
-    }
-
-    .button:hover {
-      background: var(--hover);
-      border-color: #3b4960;
-    }
-
-    .button.primary {
-      background: #1f4d7f;
-      border-color: #2d6eb3;
-    }
-
-    .button.primary:hover {
-      background: #255c97;
-    }
-
-    .button.ghost {
-      background: transparent;
-    }
-
-    .toolbar-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      flex-wrap: wrap;
-    }
-
-    .pathbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      width: 100%;
-    }
-
-    .breadcrumb {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      background: var(--panel-2);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      cursor: pointer;
-      user-select: none;
-      font-size: 13px;
-    }
-
-    .breadcrumb:hover {
-      background: var(--hover);
-    }
-
-    .tree, .list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .tree-item, .list-item, .drive-item {
-      border: 1px solid transparent;
-      border-radius: 10px;
-      padding: 10px 12px;
-      cursor: pointer;
-      transition: .15s ease;
-    }
-
-    .tree-item:hover, .list-item:hover, .drive-item:hover {
-      background: var(--hover);
-      border-color: #334056;
-    }
-
-    .list-item.selected {
-      background: var(--selected);
-      border-color: #4a658d;
-    }
-
-    .drive-item.active {
-      background: var(--selected);
-      border-color: #4a658d;
-    }
-
-    .item-main {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-    }
-
-    .icon {
-      width: 28px;
-      height: 28px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      background: #223049;
-      font-size: 15px;
-      flex: 0 0 auto;
-    }
-
-    .icon.folder { background: #3d3218; }
-    .icon.file { background: #1d3141; }
-    .icon.drive { background: #2a253f; }
-
-    .item-text {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      gap: 2px;
-    }
-
-    .item-title {
-      font-size: 14px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .item-meta {
-      font-size: 12px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .content-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-
-    .content-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 12px;
-    }
-
-    .card {
-      background: rgba(30, 36, 48, .9);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      box-shadow: var(--shadow);
-    }
-
-    .empty {
-      border: 1px dashed #42506a;
-      color: var(--muted);
-      border-radius: var(--radius);
-      padding: 26px;
-      text-align: center;
-      background: rgba(30, 36, 48, .4);
-    }
-
-    .player-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .now-playing {
-      min-height: 120px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      justify-content: center;
-    }
-
-    .muted { color: var(--muted); }
-
-    .tag-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--panel-2);
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .quick-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    audio {
-      width: 100%;
-      margin-top: 8px;
-    }
-
-    .search-hint {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .danger { color: var(--danger); }
-    .success { color: var(--accent-2); }
-
-    .spacer { flex: 1 1 auto; }
-
-    @media (max-width: 1200px) {
-      .app {
-        grid-template-columns: 260px 1fr;
-        grid-template-areas:
-          "sidebar toolbar"
-          "sidebar content"
-          "player player"
-          "statusbar statusbar";
-        grid-template-rows: auto 1fr auto auto;
-      }
-
-      .player {
-        border-left: none;
-        border-top: 1px solid var(--border);
-      }
-    }
-
-    @media (max-width: 760px) {
-      .app {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-          "toolbar"
-          "sidebar"
-          "content"
-          "player"
-          "statusbar";
-      }
-
-      .sidebar {
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="./index.css" />
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
         <h1>Media Explorer</h1>
-        <p>Prototype HTML pour explorer un support comme dans Windows Explorer et lancer un média immédiatement.</p>
+        <p>Prototype HTML pour explorer un support comme dans Windows Explorer et lancer un media immediatement.</p>
       </div>
 
       <div class="section-title">Supports</div>
       <div id="drivesList" class="tree"></div>
 
-      <div style="height: 18px;"></div>
+      <div class="sidebar-spacer" aria-hidden="true"></div>
 
       <div class="section-title">Dossiers du niveau courant</div>
       <div id="directoryTree" class="tree"></div>
@@ -411,14 +25,14 @@
 
     <header class="toolbar">
       <div class="toolbar-row">
-        <button class="button" id="backBtn">← Retour</button>
-        <button class="button" id="refreshBtn">↻ Actualiser</button>
-        <input class="input" id="pathInput" type="text" placeholder="Chemin à explorer..." />
+        <button class="button" id="backBtn">Retour</button>
+        <button class="button" id="refreshBtn">Actualiser</button>
+        <input class="input" id="pathInput" type="text" placeholder="Chemin a explorer..." />
         <button class="button primary" id="openBtn">Ouvrir</button>
       </div>
       <div class="toolbar-row">
         <input class="input" id="searchInput" type="text" placeholder="Filtrer dans le dossier courant : titre, nom de fichier..." />
-        <span class="search-hint">Filtrage local instantané. La recherche globale pourra être branchée plus tard sur SQLite / index.</span>
+        <span class="search-hint">Filtrage local instantane. La recherche globale pourra etre branchee plus tard sur SQLite / index.</span>
       </div>
       <div class="pathbar" id="breadcrumbBar"></div>
     </header>
@@ -427,532 +41,64 @@
       <div class="content-header">
         <div>
           <h2 id="currentTitle">Exploration</h2>
-          <p class="muted" id="currentSubtitle">Aucun dossier chargé</p>
+          <p class="muted" id="currentSubtitle">Aucun dossier charge</p>
         </div>
         <div class="tag-list">
           <div class="tag"><span id="dirCount">0</span> dossiers</div>
-          <div class="tag"><span id="fileCount">0</span> médias</div>
+          <div class="tag"><span id="fileCount">0</span> medias</div>
         </div>
       </div>
 
-        <div id="directoriesList" class="content-grid"></div>
-        <div id="filesList" class="content-grid"></div>
-      <div id="emptyState" class="empty" style="display:none;">Aucun média ou dossier trouvé pour ce niveau.</div>
+      <div id="contentLoader" class="loader-panel" hidden>
+        <div class="loader-spinner" aria-hidden="true"></div>
+        <div id="loaderText" class="loader-text">Chargement du dossier...</div>
+      </div>
+      <div id="directoriesList" class="content-grid"></div>
+      <div id="filesList" class="content-grid"></div>
+      <div id="emptyState" class="empty" hidden>Aucun media ou dossier trouve pour ce niveau.</div>
     </main>
 
     <aside class="player">
       <div class="player-panel">
         <div class="card now-playing">
           <div class="section-title">Lecture</div>
-          <h3 id="nowPlayingTitle">Aucun média sélectionné</h3>
+          <h3 id="nowPlayingTitle">Aucun media selectionne</h3>
           <p class="muted" id="nowPlayingMeta">Choisis un fichier .mp* dans la liste.</p>
           <audio id="audioPlayer" controls preload="none"></audio>
+          <button class="details-toggle" id="detailsToggleBtn" type="button" aria-expanded="false">
+            <span>Details</span>
+            <span id="detailsChevron" class="details-chevron">&#9662;</span>
+          </button>
+          <div id="detailsPanel" class="details-panel muted" hidden>Les informations du fichier selectionne apparaitront ici.</div>
         </div>
 
         <div class="card">
-          <div class="section-title">Détails</div>
-          <div id="detailsPanel" class="muted">Les informations du fichier sélectionné apparaîtront ici.</div>
-        </div>
-
-        <div class="card">
-          <div class="section-title">Actions rapides</div>
-          <div class="quick-actions">
-            <button class="button ghost" id="playFirstBtn">Lire le premier média</button>
-            <button class="button ghost" id="clearSelectionBtn">Effacer la sélection</button>
+          <div class="playlist-header">
+            <div class="section-title">Playlist</div>
+            <div class="playlist-menu-wrap">
+              <button class="button ghost playlist-menu-trigger" id="playlistMenuBtn" type="button" aria-expanded="false">...</button>
+              <div class="playlist-menu" id="playlistMenu" hidden>
+                <button class="playlist-menu-item" id="copyPlaylistJsonBtn" type="button">Copy JSON</button>
+                <button class="playlist-menu-item" id="exportPlaylistBtn" type="button">Export</button>
+                <button class="playlist-menu-item" id="importPlaylistBtn" type="button">Import</button>
+              </div>
+              <input id="importPlaylistInput" type="file" accept="application/json,.json" hidden />
+            </div>
           </div>
+          <div id="playlistPanel" class="playlist-list muted">Aucun fichier dans la playlist.</div>
         </div>
 
-        <div class="card">
-          <div class="section-title">Idées d'évolution</div>
-          <div class="tag-list">
-            <span class="tag">Recherche contextuelle</span>
-            <span class="tag">Mood / tags</span>
-            <span class="tag">SQLite lazy index</span>
-            <span class="tag">Playlist dynamique</span>
-          </div>
-        </div>
       </div>
     </aside>
 
     <footer class="statusbar">
-      <span id="statusText">Prêt.</span>
-      <span id="endpointInfo">API: drives.php / files.php</span>
+      <span id="statusText">Pret.</span>
+      <span id="endpointInfo">API: moomuse_drives / moomuse_files / moomuse_directories</span>
     </footer>
   </div>
 
-  <script>
-    const state = {
-        currentPath: '',
-        history: [],
-        directories: [],
-        files: [],
-        filteredFiles: [],
-        selectedFile: null,
-        drives: [],
-        offset: 0,
-        limit: 100,
-        loading: false,
-        hasMore: true
-    };
+  <div id="snackbar" class="snackbar" hidden></div>
 
-    const el = {
-      drivesList: document.getElementById('drivesList'),
-      directoryTree: document.getElementById('directoryTree'),
-    directoriesList: document.getElementById('directoriesList'),
-    filesList: document.getElementById('filesList'),
-      emptyState: document.getElementById('emptyState'),
-      currentTitle: document.getElementById('currentTitle'),
-      currentSubtitle: document.getElementById('currentSubtitle'),
-      dirCount: document.getElementById('dirCount'),
-      fileCount: document.getElementById('fileCount'),
-      nowPlayingTitle: document.getElementById('nowPlayingTitle'),
-      nowPlayingMeta: document.getElementById('nowPlayingMeta'),
-      detailsPanel: document.getElementById('detailsPanel'),
-      audioPlayer: document.getElementById('audioPlayer'),
-      statusText: document.getElementById('statusText'),
-      pathInput: document.getElementById('pathInput'),
-      searchInput: document.getElementById('searchInput'),
-      breadcrumbBar: document.getElementById('breadcrumbBar')
-    };
-
-    function setStatus(message, isError = false) {
-      el.statusText.textContent = message;
-      el.statusText.className = isError ? 'danger' : '';
-    }
-
-    function updateCounters() {
-        el.dirCount.textContent = state.directories.length;
-        el.fileCount.textContent = state.filteredFiles.length;
-        el.currentTitle.textContent = state.currentPath || 'Exploration';
-        el.currentSubtitle.textContent = `${state.directories.length} dossier(s), ${state.files.length} média(s)`;
-    }
-
-    function formatBytes(bytes) {
-      if (bytes == null || Number.isNaN(bytes)) return 'taille inconnue';
-      if (bytes === 0) return '0 B';
-      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(1024));
-      return `${(bytes / Math.pow(1024, i)).toFixed(i ? 1 : 0)} ${units[i]}`;
-    }
-
-    function formatDate(timestamp) {
-      if (!timestamp) return 'date inconnue';
-      const date = new Date(timestamp * 1000);
-      if (Number.isNaN(date.getTime())) return 'date inconnue';
-      return date.toLocaleString('fr-BE');
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    async function loadDrives() {
-      setStatus('Chargement des supports...');
-      try {
-        const response = await fetch('/?get=moomuse_drives');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const payload = await response.json();
-        state.drives = payload.drives || [];
-        renderDrives();
-        setStatus(`Supports détectés : ${state.drives.length}`);
-
-        if (!state.currentPath && state.drives.length) {
-          openPath(state.drives[0].path, false);
-        }
-      }
-      catch (error) {
-        console.error(error);
-        setStatus(`Impossible de charger les supports: ${error.message}`, true);
-      }
-    }
-
-    async function openPath(path, pushHistory = true) {
-      if (!path) return;
-      setStatus(`Chargement de ${path} ...`);
-
-      try {
-        const response = await fetch(`/?get=moomuse_files&path=${encodeURIComponent(path)}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const payload = await response.json();
-
-        if (pushHistory && state.currentPath && state.currentPath !== payload.base_path) {
-          state.history.push(state.currentPath);
-        }
-
-
-        state.currentPath = payload.base_path;
-        state.directories = [];
-        state.files = [];
-        state.filteredFiles = [];
-        state.offset = 0;
-        state.hasMore = true;
-        state.selectedFile = null;
-
-        el.pathInput.value = state.currentPath;
-        el.searchInput.value = '';
-        el.directoriesList.innerHTML = '';
-        el.filesList.innerHTML = '';
-
-        updateCounters();
-
-        while (state.hasMore) {
-            await loadMore();
-        }
-
-        renderDrives();
-        renderDirectories();
-        updateEmptyState();
-        renderBreadcrumbs();
-        renderPlayer();
-        setStatus(`Dossier chargé : ${state.currentPath}`);
-
-      }
-      catch (error) {
-        console.error(error);
-        setStatus(`Impossible de charger le dossier: ${error.message}`, true);
-      }
-    }
-
-    async function loadMore() {
-        if (state.loading || !state.hasMore) return;
-
-        state.loading = true;
-
-        try {
-            const response = await fetch(
-                `/?get=moomuse_files&path=${encodeURIComponent(state.currentPath)}&start=${state.offset}&limit=${state.limit}`
-            );
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const payload = await response.json();
-
-            const newFiles = payload.files || [];
-            const newDirectories = payload.directories || [];
-
-            state.files.push(...newFiles);
-            state.directories.push(...newDirectories);
-            state.filteredFiles = [...state.files];
-
-            if (newDirectories.length) {
-                appendContent(newDirectories, 'directory');
-            }
-
-            if (newFiles.length) {
-                appendContent(newFiles, 'file');
-            }
-
-            const batchSize = Math.max(newFiles.length, newDirectories.length);
-            state.offset += batchSize;
-
-            if (newFiles.length < state.limit && newDirectories.length < state.limit) {
-                state.hasMore = false;
-            }
-
-            updateCounters();
-            updateEmptyState();
-
-        } catch (e) {
-            console.error(e);
-            setStatus(`Erreur de chargement: ${e.message}`, true);
-            state.hasMore = false;
-        }
-
-        state.loading = false;
-    }
-
-    function appendContent(entries, type) {
-        const html = entries.map(entry => {
-            if (type === 'directory') {
-                return `
-                    <div class="card list-item" data-type="directory" data-path="${escapeHtml(entry.path)}">
-                        <div class="item-main">
-                            <div class="icon folder">📁</div>
-                            <div class="item-text">
-                                <div class="item-title">${escapeHtml(entry.name)}</div>
-                                <div class="item-meta">Dossier</div>
-                            </div>
-                        </div>
-                    </div>`;
-            }
-
-            return `
-                <div class="card list-item" data-type="file" data-path="${escapeHtml(entry.path)}">
-                    <div class="item-main">
-                        <div class="icon file">🎵</div>
-                        <div class="item-text">
-                            <div class="item-title">${escapeHtml(entry.name)}</div>
-                            <div class="item-meta">${escapeHtml(entry.extension || 'media')} · ${escapeHtml(formatBytes(entry.size))}</div>
-                        </div>
-                    </div>
-                </div>`;
-        }).join('');
-
-        const container = (type === 'directory') ? el.directoriesList : el.filesList;
-
-        container.insertAdjacentHTML('beforeend', html);
-
-        const newElements = container.querySelectorAll('.list-item:not([data-bound])');
-
-        newElements.forEach(item => {
-            item.dataset.bound = '1';
-
-            const path = item.dataset.path;
-
-            if (type === 'directory') {
-                item.addEventListener('click', () => openPath(path));
-            } 
-            else {
-                item.addEventListener('click', () => selectFile(path));
-                item.addEventListener('click', () => playFile(path));
-            }
-        });
-    }
-
-    function renderSelection() {
-        document.querySelectorAll('.list-item.selected')
-            .forEach(el => el.classList.remove('selected'));
-
-        if (!state.selectedFile) return;
-
-        const elSelected = document.querySelector(
-            `.list-item[data-path="${CSS.escape(state.selectedFile.path)}"]`
-        );
-
-        if (elSelected) {
-            elSelected.classList.add('selected');
-        }
-    }
-    function updateEmptyState() {
-      const hasDirectories = state.directories.length > 0;
-      const hasFiles = state.filteredFiles.length > 0;
-      el.emptyState.style.display = hasDirectories || hasFiles ? 'none' : 'block';
-    }
-
-    function renderFilesList() {
-      el.filesList.innerHTML = state.filteredFiles.map(file => {
-        const selected = state.selectedFile && state.selectedFile.path === file.path ? ' selected' : '';
-        return `
-          <div class="card list-item${selected}" data-type="file" data-path="${escapeHtml(file.path)}">
-            <div class="item-main">
-              <div class="icon file">🎵</div>
-              <div class="item-text">
-                <div class="item-title">${escapeHtml(file.name)}</div>
-                <div class="item-meta">${escapeHtml(file.extension || 'media')} · ${escapeHtml(formatBytes(file.size))}</div>
-              </div>
-            </div>
-          </div>`;
-      }).join('');
-
-      [...el.filesList.querySelectorAll('.list-item')].forEach(item => {
-        const path = item.dataset.path;
-        item.addEventListener('click', () => selectFile(path));
-        item.addEventListener('click', () => playFile(path));
-      });
-
-      updateEmptyState();
-    }
-
-    function renderDrives() {
-      if (!state.drives.length) {
-        el.drivesList.innerHTML = '<div class="muted">Aucun support détecté.</div>';
-        return;
-      }
-
-      el.drivesList.innerHTML = state.drives.map(drive => {
-        const active = state.currentPath && state.currentPath.startsWith(drive.path) ? 'active' : '';
-        return `
-          <div class="drive-item ${active}" data-path="${escapeHtml(drive.path)}">
-            <div class="item-main">
-              <div class="icon drive">💽</div>
-              <div class="item-text">
-                <div class="item-title">${escapeHtml(drive.name || drive.path)}</div>
-                <div class="item-meta">${escapeHtml(drive.path)} · libre ${escapeHtml(formatBytes(drive.free))}</div>
-              </div>
-            </div>
-          </div>`;
-      }).join('');
-
-      [...el.drivesList.querySelectorAll('.drive-item')].forEach(item => {
-        item.addEventListener('click', () => openPath(item.dataset.path));
-      });
-    }
-
-    function renderDirectories() {
-      if (!state.directories.length) {
-        el.directoryTree.innerHTML = '<div class="muted">Aucun sous-dossier.</div>';
-        return;
-      }
-
-      el.directoryTree.innerHTML = state.directories.map(dir => `
-        <div class="tree-item" data-path="${escapeHtml(dir.path)}">
-          <div class="item-main">
-            <div class="icon folder">📁</div>
-            <div class="item-text">
-              <div class="item-title">${escapeHtml(dir.name)}</div>
-              <div class="item-meta">${escapeHtml(dir.path)}</div>
-            </div>
-          </div>
-        </div>`).join('');
-
-      [...el.directoryTree.querySelectorAll('.tree-item')].forEach(item => {
-        item.addEventListener('click', () => openPath(item.dataset.path));
-      });
-    }
-
-    function renderBreadcrumbs() {
-      const path = state.currentPath;
-      if (!path) {
-        el.breadcrumbBar.innerHTML = '';
-        return;
-      }
-
-      const normalized = path.replace(/\\/g, '/');
-      const rawParts = normalized.split('/').filter(Boolean);
-      const crumbs = [];
-
-      if (/^[A-Za-z]:$/.test(rawParts[0] || '')) {
-        let current = rawParts[0] + '/';
-        crumbs.push({ label: rawParts[0], path: current });
-        for (let i = 1; i < rawParts.length; i++) {
-          current += rawParts[i] + '/';
-          crumbs.push({ label: rawParts[i], path: current });
-        }
-      }
-      else {
-        let current = '/';
-        crumbs.push({ label: '/', path: '/' });
-        for (const part of rawParts) {
-          current = current === '/' ? `/${part}` : `${current}/${part}`;
-          crumbs.push({ label: part, path: current });
-        }
-      }
-
-      el.breadcrumbBar.innerHTML = crumbs.map(crumb => `
-        <div class="breadcrumb" data-path="${escapeHtml(crumb.path)}">${escapeHtml(crumb.label)}</div>
-      `).join('');
-
-      [...el.breadcrumbBar.querySelectorAll('.breadcrumb')].forEach(item => {
-        item.addEventListener('click', () => openPath(item.dataset.path));
-      });
-    }
-
-    function selectFile(path) {
-      const file = state.files.find(item => item.path === path);
-      if (!file) return;
-      state.selectedFile = file;
-      renderSelection();
-      renderPlayer();
-      setStatus(`Fichier sélectionné : ${file.name}`);
-    }
-
-    function buildMediaUrl(file) {
-      if (!file) return '';
-
-      // Prototype:
-      // 1) si le fichier est directement servi par le serveur web, adapter ici.
-      // 2) sinon remplacer cette logique par un endpoint dédié, ex: stream.php?path=...
-        return `/?get=moomuse_stream&path=${encodeURIComponent(file.path)}`;
-    }
-
-    function playFile(path) {
-      const file = state.files.find(item => item.path === path);
-      if (!file) return;
-      state.selectedFile = file;
-      renderSelection();
-      renderPlayer(true);
-      setStatus(`Lecture : ${file.name}`);
-    }
-
-    function renderPlayer(autoPlay = false) {
-      const file = state.selectedFile;
-      if (!file) {
-        el.nowPlayingTitle.textContent = 'Aucun média sélectionné';
-        el.nowPlayingMeta.textContent = 'Choisis un fichier .mp* dans la liste.';
-        el.detailsPanel.innerHTML = 'Les informations du fichier sélectionné apparaîtront ici.';
-        el.audioPlayer.removeAttribute('src');
-        el.audioPlayer.load();
-        return;
-      }
-
-      el.nowPlayingTitle.textContent = file.name;
-      el.nowPlayingMeta.textContent = `${file.extension || 'media'} · ${formatBytes(file.size)} · modifié le ${formatDate(file.modified)}`;
-      el.detailsPanel.innerHTML = `
-        <div><strong>Nom</strong><br>${escapeHtml(file.name)}</div>
-        <div style="height:10px"></div>
-        <div><strong>Chemin</strong><br><span class="muted">${escapeHtml(file.path)}</span></div>
-        <div style="height:10px"></div>
-        <div><strong>Extension</strong><br>${escapeHtml(file.extension || '-')}</div>
-        <div style="height:10px"></div>
-        <div><strong>Taille</strong><br>${escapeHtml(formatBytes(file.size))}</div>
-        <div style="height:10px"></div>
-        <div><strong>Dernière modification</strong><br>${escapeHtml(formatDate(file.modified))}</div>
-      `;
-
-      const mediaUrl = buildMediaUrl(file);
-      if (mediaUrl) {
-        if (el.audioPlayer.src !== mediaUrl) {
-          el.audioPlayer.src = mediaUrl;
-        }
-        if (autoPlay) {
-          el.audioPlayer.play().catch(() => {
-            setStatus('Lecture bloquée par le navigateur. Clique sur Play.', true);
-          });
-        }
-      }
-    }
-
-    function applyFilter() {
-      const query = el.searchInput.value.trim().toLowerCase();
-      if (!query) {
-        state.filteredFiles = [...state.files];
-      }
-      else {
-        state.filteredFiles = state.files.filter(file => {
-          return [file.name, file.path, file.extension]
-            .filter(Boolean)
-            .some(value => String(value).toLowerCase().includes(query));
-        });
-      }
-      renderFilesList();
-      el.fileCount.textContent = state.filteredFiles.length;
-    }
-
-    document.getElementById('refreshBtn').addEventListener('click', () => openPath(state.currentPath || el.pathInput.value, false));
-    document.getElementById('openBtn').addEventListener('click', () => openPath(el.pathInput.value));
-    document.getElementById('backBtn').addEventListener('click', () => {
-      const previous = state.history.pop();
-      if (previous) {
-        openPath(previous, false);
-      }
-    });
-    document.getElementById('playFirstBtn').addEventListener('click', () => {
-      const first = state.filteredFiles[0];
-      if (first) playFile(first.path);
-    });
-    document.getElementById('clearSelectionBtn').addEventListener('click', () => {
-      state.selectedFile = null;
-      renderFilesList();
-      renderPlayer();
-      setStatus('Sélection effacée.');
-    });
-    el.pathInput.addEventListener('keydown', event => {
-      if (event.key === 'Enter') openPath(el.pathInput.value);
-    });
-    el.searchInput.addEventListener('input', applyFilter);
-
-    loadDrives();
-  </script>
+  <script src="./index.js"></script>
 </body>
 </html>
-
-
-
-

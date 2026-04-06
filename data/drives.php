@@ -1,8 +1,9 @@
 <?php
 /*
-    Developed by Yesbabylon - https://yesbabylon.com
-    (c) 2025-2026 Yesbabylon SA
-    Licensed under the GNU AGPL v3 License - https://www.gnu.org/licenses/agpl-3.0.html
+    This file is part of MooMuse <http://www.github.com/cedricfrancoys/moomuse>
+    Some Rights Reserved
+    Original author(s): Cédric FRANCOYS
+    Licensed under GNU GPL 3 license <http://www.gnu.org/licenses/>
 */
 
 [$params, $providers] = eQual::announce([

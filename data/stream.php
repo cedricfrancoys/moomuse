@@ -1,4 +1,10 @@
 <?php
+/*
+    This file is part of MooMuse <http://www.github.com/cedricfrancoys/moomuse>
+    Some Rights Reserved
+    Original author(s): Cédric FRANCOYS
+    Licensed under GNU GPL 3 license <http://www.gnu.org/licenses/>
+*/
 
 [$params, $providers] = eQual::announce([
     'description'   => 'Stream local file (buffered, supports HTTP range).',
@@ -70,12 +76,12 @@ if($http_range && preg_match('/bytes=(\d*)-(\d*)/', $http_range, $matches)) {
 
     if($rStart === '' && $rEnd !== '') {
         // ex: bytes=-500
-        $start = max(0, $size - (int)$rEnd);
+        $start = max(0, $size - (int) $rEnd);
         $end   = $size - 1;
     }
     else {
-        $start = ($rStart !== '') ? (int)$rStart : 0;
-        $end   = ($rEnd !== '') ? (int)$rEnd : $end;
+        $start = ($rStart !== '') ? (int) $rStart : 0;
+        $end   = ($rEnd !== '') ? (int) $rEnd : $end;
     }
 
     // clamp
