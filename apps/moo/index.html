@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Media Explorer Prototype</title>
+  <link rel="stylesheet" href="./material.css" />
   <link rel="stylesheet" href="./index.css" />
 </head>
 <body>
@@ -19,8 +20,10 @@
 
       <div class="sidebar-spacer" aria-hidden="true"></div>
 
-      <div class="section-title">Dossiers du niveau courant</div>
-      <div id="directoryTree" class="tree"></div>
+      <div class="sidebar-current-directories">
+        <div class="section-title">Dossiers du niveau courant</div>
+        <div id="directoryTree" class="tree sidebar-directory-tree"></div>
+      </div>
     </aside>
 
     <header class="toolbar">
@@ -61,10 +64,17 @@
     <aside class="player">
       <div class="player-panel">
         <div class="card now-playing">
-          <div class="section-title">Lecture</div>
-          <h3 id="nowPlayingTitle">Aucun media selectionne</h3>
-          <p class="muted" id="nowPlayingMeta">Choisis un fichier .mp* dans la liste.</p>
-          <audio id="audioPlayer" controls preload="none"></audio>
+          <div class="theme-switcher" role="radiogroup" aria-label="Mode d affichage">
+            <button class="button ghost theme-toggle-btn" id="themeDarkBtn" type="button" aria-pressed="false" title="Dark" aria-label="Dark">
+              <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+            </button>
+            <button class="button ghost theme-toggle-btn" id="themeLightBtn" type="button" aria-pressed="false" title="Light" aria-label="Light">
+              <span class="material-symbols-outlined" aria-hidden="true">light_mode</span>
+            </button>
+            <button class="button ghost theme-toggle-btn" id="themeAutoBtn" type="button" aria-pressed="false">Auto</button>
+          </div>
+          <div class="section-title">Sélection</div>
+          <h3 id="nowPlayingTitle">Aucun media selectionné</h3>
           <button class="details-toggle" id="detailsToggleBtn" type="button" aria-expanded="false">
             <span>Details</span>
             <span id="detailsChevron" class="details-chevron">&#9662;</span>
@@ -72,9 +82,25 @@
           <div id="detailsPanel" class="details-panel muted" hidden>Les informations du fichier selectionne apparaitront ici.</div>
         </div>
 
-        <div class="card">
+        <div class="card playlists-card">
+          <div class="section-title">Playlists</div>
+          <input class="input playlists-search" id="playlistsSearchInput" type="text" placeholder="Rechercher une playlist..." autocomplete="off" />
+          <div id="playlistsPanel" class="playlists-list muted">Aucune playlist disponible.</div>
+        </div>
+
+        <div class="card current-playlist-card">
           <div class="playlist-header">
-            <div class="section-title">Playlist</div>
+            <div class="playlist-header-main">
+              <div class="section-title">Playlist</div>
+              <div class="playlist-toggle-group">
+                <button class="button ghost playlist-toggle-btn" id="playlistRandomBtn" type="button" aria-pressed="false" title="Random">
+                  <span class="material-symbols-outlined" aria-hidden="true">shuffle</span>
+                </button>
+                <button class="button ghost playlist-toggle-btn" id="playlistRepeatBtn" type="button" aria-pressed="false" title="Repeat">
+                  <span class="material-symbols-outlined" id="playlistRepeatIcon" aria-hidden="true">repeat</span>
+                </button>
+              </div>
+            </div>
             <div class="playlist-menu-wrap">
               <button class="button ghost playlist-menu-trigger" id="playlistMenuBtn" type="button" aria-expanded="false">...</button>
               <div class="playlist-menu" id="playlistMenu" hidden>
@@ -92,13 +118,16 @@
     </aside>
 
     <footer class="statusbar">
-      <span id="statusText">Pret.</span>
-      <span id="endpointInfo">API: moomuse_drives / moomuse_files / moomuse_directories</span>
+      <span id="statusText" hidden>Pret.</span>
+      <div class="statusbar-player">
+        <audio id="audioPlayer" controls preload="none"></audio>
+      </div>
     </footer>
   </div>
 
   <div id="snackbar" class="snackbar" hidden></div>
 
+  <script src="./material.js"></script>
   <script src="./index.js"></script>
 </body>
 </html>
