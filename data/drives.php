@@ -28,15 +28,48 @@
  * Methods
  */
 
+
 $getWindowsVolumeId = function($letter) {
     $output = @shell_exec("vol {$letter}:");
     if($output && preg_match('/([A-F0-9]{4}-[A-F0-9]{4})/i', $output, $matches)) {
-        return strtoupper($matches[1]);
+        return $matches[1];
     }
     return null;
 };
 
-$getWindowsDrives = function() use($getWindowsVolumeId) {
+$getWindowsVolumeGuid = function($letter) {
+
+    $letter = strtoupper(rtrim($letter, ':')) . ':\\';
+
+    $output = [];
+    exec('mountvol', $output);
+
+    $currentGuid = null;
+
+    foreach ($output as $line) {
+
+        $line = trim($line);
+
+        // Ligne GUID
+        if (preg_match('/^\\\\\\\\\?\\\\Volume\{([a-f0-9\-]+)\}\\\\$/i', $line, $matches)) {
+            $currentGuid = strtolower($matches[1]);
+        }
+
+        // Ligne mount point
+        elseif ($currentGuid && preg_match('/^([A-Z]):\\\\$/i', $line, $matches)) {
+
+            if ($matches[1] . ':\\' === $letter) {
+                return $currentGuid;
+            }
+
+            $currentGuid = null;
+        }
+    }
+
+    return null;
+};
+
+$getWindowsDrives = function() use($getWindowsVolumeId, $getWindowsVolumeGuid) {
     $drives = [];
 
     foreach(range('A', 'Z') as $letter) {
@@ -46,6 +79,7 @@ $getWindowsDrives = function() use($getWindowsVolumeId) {
             $drives[] = [
                 'name'  => $letter,
                 'id'    => $getWindowsVolumeId($letter),
+                'uuid'  => $getWindowsVolumeGuid($letter),
                 'path'  => $path,
                 'type'  => 'drive',
                 'total' => @disk_total_space($path),
@@ -56,9 +90,6 @@ $getWindowsDrives = function() use($getWindowsVolumeId) {
 
     return $drives;
 };
-
-
-
 
 $getLinuxVolumeId = function($device) {
     if (!$device) return null;
@@ -85,15 +116,16 @@ $getLinuxMounts = function() use($getLinuxVolumeId){
             [$device, $mountpoint] = $parts;
 
             // Filtrer mounts système peu utiles
-            if (!is_dir($mountpoint)) continue;
-            if (strpos($mountpoint, '/proc') === 0) continue;
-            if (strpos($mountpoint, '/sys') === 0) continue;
-            if (strpos($mountpoint, '/dev') === 0) continue;
+            if(!is_dir($mountpoint)) continue;
+            if(strpos($mountpoint, '/proc') === 0) continue;
+            if(strpos($mountpoint, '/sys') === 0) continue;
+            if(strpos($mountpoint, '/dev') === 0) continue;
 
             $drives[] = [
                 'device' => $device,
                 'name'   => basename($mountpoint) ?: '/',
                 'id'     => $getLinuxVolumeId($device),
+                'uuid'   => $getLinuxVolumeId($device),
                 'path'   => $mountpoint,
                 'type'   => 'mount',
                 'total'  => @disk_total_space($mountpoint),
@@ -104,7 +136,7 @@ $getLinuxMounts = function() use($getLinuxVolumeId){
 
     // fallback simple si /proc non dispo
     if(!count($drives)) {
-        foreach (array_merge(glob('/mnt/*'), glob('/media/*'), glob('/Volumes/*')) as $mount) {
+        foreach(array_merge(glob('/mnt/*'), glob('/media/*'), glob('/Volumes/*')) as $mount) {
             if(is_dir($mount)) {
                 $drives[] = [
                     'name'  => basename($mount),
@@ -118,7 +150,7 @@ $getLinuxMounts = function() use($getLinuxVolumeId){
         }
     }
 
-    // root toujours présent
+    // always the root
     $drives[] = [
         'name'  => '/',
         'path'  => '/',
@@ -133,20 +165,17 @@ $getLinuxMounts = function() use($getLinuxVolumeId){
 
 
 
+
 /**
  * Action
  */
 
-$isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+$is_windows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 
-$drives = $isWindows
+$drives = $is_windows
     ? $getWindowsDrives()
     : $getLinuxMounts();
 
 $context->httpResponse()
-    ->header('Content-Type', 'application/json')
-    ->body(json_encode([
-        'os'     => PHP_OS,
-        'drives' => $drives
-    ]), true)
+    ->body($drives)
     ->send();

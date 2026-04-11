@@ -76,6 +76,7 @@ function syncDetailsVisibility() {
   el.detailsToggleBtn.setAttribute('aria-expanded', state.detailsExpanded ? 'true' : 'false');
   el.detailsPanel.hidden = !state.detailsExpanded;
 }
+
 function setStatus(message, isError = false) {
   el.statusText.textContent = message;
   el.statusText.className = isError ? 'danger' : '';
@@ -438,6 +439,8 @@ function refreshContentView() {
 
 async function loadDrives() {
   setStatus('Chargement des supports...');
+  showLoader('Chargement des supports...');
+  renderDrives();
 
   try {
     const response = await fetch('/?get=moomuse_drives');
@@ -446,16 +449,22 @@ async function loadDrives() {
     }
 
     const payload = await response.json();
-    state.drives = payload.drives || [];
+    state.drives = payload || [];
 
     renderDrives();
     setStatus(`Supports detectes : ${state.drives.length}`);
 
     if (!state.currentPath && state.drives.length) {
       await openPath(state.drives[0].path, false);
+      return;
     }
+
+    hideLoader();
+    updateEmptyState();
   } catch (error) {
     console.error(error);
+    hideLoader();
+    updateEmptyState();
     setStatus(`Impossible de charger les supports: ${error.message}`, true);
   }
 }
@@ -516,7 +525,7 @@ async function openPath(path, pushHistory = true) {
       }
     };
 
-    const [directoriesResult, filesResult] = await Promise.all([
+    const [directoriesResult, filesResult] = await Promise.allSettled([
       fetchAllEntries('moomuse_directories', 'directories', path, (batch, basePath) => {
         if (!state.currentPath) {
           state.currentPath = basePath;
@@ -536,7 +545,24 @@ async function openPath(path, pushHistory = true) {
       })
     ]);
 
-    const basePath = filesResult.basePath || directoriesResult.basePath || path;
+    const directoriesBasePath = directoriesResult.status === 'fulfilled'
+      ? directoriesResult.value.basePath
+      : null;
+    const filesBasePath = filesResult.status === 'fulfilled'
+      ? filesResult.value.basePath
+      : null;
+    const basePath = filesBasePath || directoriesBasePath || path;
+    const loadingErrors = [];
+
+    if (directoriesResult.status === 'rejected') {
+      console.error(directoriesResult.reason);
+      loadingErrors.push(`dossiers: ${directoriesResult.reason.message}`);
+    }
+
+    if (filesResult.status === 'rejected') {
+      console.error(filesResult.reason);
+      loadingErrors.push(`fichiers: ${filesResult.reason.message}`);
+    }
 
     state.currentPath = basePath;
     el.pathInput.value = state.currentPath;
@@ -551,13 +577,20 @@ async function openPath(path, pushHistory = true) {
     hideLoader();
     refreshContentView();
 
-    setStatus(`Dossier charge : ${state.currentPath}`);
-  } catch (error) {
+    if (loadingErrors.length) {
+      setStatus(`Chargement partiel pour ${state.currentPath} (${loadingErrors.join(' | ')})`, true);
+    } 
+    else {
+      setStatus(`Dossier charge : ${state.currentPath}`);
+    }
+  } 
+  catch (error) {
     console.error(error);
     hideLoader();
     updateEmptyState();
     setStatus(`Impossible de charger le dossier: ${error.message}`, true);
-  } finally {
+  } 
+  finally {
     state.loading = false;
   }
 }

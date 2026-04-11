@@ -38,7 +38,11 @@ $basePath = trim($params['path'], '"\'');
 $limit = $params['limit'];
 $start = $params['start'];
 
-if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+$isAudioExt = function(string $extension): bool {
+    return in_array($extension, ['aac', 'flac', 'm4a', 'mp2', 'mp3', 'mp4', 'ogg', 'opus', 'wav', 'wma'], true);
+};
+
+if(strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
     if (!is_dir($basePath)) {
         throw new Exception("path_not_found", EQ_ERROR_INVALID_PARAM);
     }
@@ -53,13 +57,14 @@ else {
 $files = [];
 $iterator = new DirectoryIterator($basePath);
 
-foreach ($iterator as $item) {
-    if ($item->isDot() || !$item->isFile()) {
+foreach($iterator as $item) {
+    if($item->isDot() || !$item->isFile()) {
         continue;
     }
 
     $ext = strtolower($item->getExtension());
-    if (!str_starts_with($ext, 'mp')) {
+    // Allow browser-supported audio formats
+    if(!$isAudioExt($ext)) {
         continue;
     }
 

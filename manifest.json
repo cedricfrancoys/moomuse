@@ -1,0 +1,34 @@
+{
+    "name": "moo",
+    "description": "MooMuse - Much moo than a media player.",
+    "version": "2.0",
+    "authors": ["Cedric Francoys"],
+    "license": "GPL-3",
+    "tags": [ "moo", "moomuse" ],
+    "depends_on": [],
+    "requires": {
+        "james-heinrich/getid3": "1.9.*"
+    },
+    "apps": [ 
+        "moo",
+        {
+            "id": "moomuse",
+            "name": "MooMuse",
+            "extends": "app",
+            "description": "MooMuse - Backend application.",
+            "icon": "storefront",
+            "color": "#f6bd04",
+            "access": {
+                "groups": [
+                    "users"
+                ]
+            },
+            "params": {
+                "menus": {
+                    "left": "moomuse.left",
+                    "top": "moomuse.top"
+                }
+            }
+        }
+    ]
+}
