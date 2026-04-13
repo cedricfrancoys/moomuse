@@ -1,0 +1,47 @@
+{
+    "name": "Directories",
+    "description": "Default list view for directories.",
+    "actions": [
+        {
+            "id": "action.scan",
+            "inline": true,
+            "label": "Scan",
+            "icon": "sync",
+            "description": "Scan this directory and create missing child directories and tracks.",
+            "controller": "moomuse_Directory_scan",
+            "params": {
+                "id": "object.id"
+            }
+        }
+    ],
+    "layout": {
+        "items": [
+            {
+                "type": "field",
+                "value": "name",
+                "width": "20%"
+            },
+            {
+                "type": "field",
+                "value": "path",
+                "width": "35%"
+            },
+            {
+                "type": "field",
+                "value": "device_id",
+                "width": "15%"
+            },
+            {
+                "type": "field",
+                "value": "parent_id",
+                "width": "15%"
+            },
+            {
+                "type": "field",
+                "value": "status",
+                "width": "15%",
+                "sortable": true
+            }
+        ]
+    }
+}

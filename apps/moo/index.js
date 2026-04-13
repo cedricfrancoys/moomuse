@@ -8,6 +8,11 @@ const state = {
   savedPlaylists: [],
   filteredSavedPlaylists: [],
   playlist: [],
+  currentPlaylistMeta: {
+    name: 'Playlist courante',
+    author: '',
+    description: ''
+  },
   playlistsQuery: '',
   fileRegistry: {},
   currentTrack: null,
@@ -17,8 +22,18 @@ const state = {
   repeatMode: false,
   themeMode: 'dark',
   detailsExpanded: false,
+  playlistsExpanded: false,
+  showDirectories: true,
+  showFiles: true,
   drives: [],
-  loading: false
+  loading: false,
+  mode: 'browse', // 'browse' or 'library'
+  libraryTracks: [],
+  libraryCategory: 'all',
+  libraryQuery: '',
+  libraryPage: 1,
+  libraryPageSize: 50,
+  libraryTotalCount: 0
 };
 
 const PAGE_SIZE = 100;
@@ -42,6 +57,8 @@ const el = {
   themeDarkBtn: document.getElementById('themeDarkBtn'),
   themeLightBtn: document.getElementById('themeLightBtn'),
   themeAutoBtn: document.getElementById('themeAutoBtn'),
+  playlistsToggleBtn: document.getElementById('playlistsToggleBtn'),
+  playlistsChevron: document.getElementById('playlistsChevron'),
   playlistsSearchInput: document.getElementById('playlistsSearchInput'),
   playlistsPanel: document.getElementById('playlistsPanel'),
   playlistPanel: document.getElementById('playlistPanel'),
@@ -50,31 +67,116 @@ const el = {
   playlistRepeatIcon: document.getElementById('playlistRepeatIcon'),
   playlistMenuBtn: document.getElementById('playlistMenuBtn'),
   playlistMenu: document.getElementById('playlistMenu'),
+  editPlaylistBtn: document.getElementById('editPlaylistBtn'),
   copyPlaylistJsonBtn: document.getElementById('copyPlaylistJsonBtn'),
   exportPlaylistBtn: document.getElementById('exportPlaylistBtn'),
   importPlaylistBtn: document.getElementById('importPlaylistBtn'),
   importPlaylistInput: document.getElementById('importPlaylistInput'),
+  playlistEditModal: document.getElementById('playlistEditModal'),
+  closePlaylistEditBtn: document.getElementById('closePlaylistEditBtn'),
+  cancelPlaylistEditBtn: document.getElementById('cancelPlaylistEditBtn'),
+  savePlaylistEditBtn: document.getElementById('savePlaylistEditBtn'),
+  playlistNameInput: document.getElementById('playlistNameInput'),
+  playlistAuthorInput: document.getElementById('playlistAuthorInput'),
+  playlistDescriptionInput: document.getElementById('playlistDescriptionInput'),
   audioPlayer: document.getElementById('audioPlayer'),
   snackbar: document.getElementById('snackbar'),
   statusText: document.getElementById('statusText'),
   pathInput: document.getElementById('pathInput'),
   searchInput: document.getElementById('searchInput'),
+  showDirectoriesBtn: document.getElementById('showDirectoriesBtn'),
+  showFilesBtn: document.getElementById('showFilesBtn'),
   breadcrumbBar: document.getElementById('breadcrumbBar'),
   refreshBtn: document.getElementById('refreshBtn'),
   openBtn: document.getElementById('openBtn'),
   backBtn: document.getElementById('backBtn'),
   playFirstBtn: document.getElementById('playFirstBtn'),
-  clearSelectionBtn: document.getElementById('clearSelectionBtn')
+  clearSelectionBtn: document.getElementById('clearSelectionBtn'),
+  // Mode switching
+  browseModeBtn: document.getElementById('browseModeBtn'),
+  libraryModeBtn: document.getElementById('libraryModeBtn'),
+  modeDescription: document.getElementById('modeDescription'),
+  browseSidebar: document.getElementById('browseSidebar'),
+  librarySidebar: document.getElementById('librarySidebar'),
+  browseToolbar: document.getElementById('browseToolbar'),
+  libraryToolbar: document.getElementById('libraryToolbar'),
+  browseContent: document.getElementById('browseContent'),
+  libraryContent: document.getElementById('libraryContent'),
+  // Library elements
+  librarySearchInput: document.getElementById('librarySearchInput'),
+  libraryRefreshBtn: document.getElementById('libraryRefreshBtn'),
+  libraryIndexStatus: document.getElementById('libraryIndexStatus'),
+  libraryPlaylistsList: document.getElementById('libraryPlaylistsList'),
+  libraryList: document.getElementById('libraryList'),
+  libraryLoader: document.getElementById('libraryLoader'),
+  libraryLoaderText: document.getElementById('libraryLoaderText'),
+  libraryEmptyState: document.getElementById('libraryEmptyState'),
+  librarySubtitle: document.getElementById('librarySubtitle'),
+  libraryTrackCount: document.getElementById('libraryTrackCount'),
+  libraryArtistCount: document.getElementById('libraryArtistCount'),
+  libraryAlbumCount: document.getElementById('libraryAlbumCount')
 };
 
 let snackbarTimer = null;
 const themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const PLAYLIST_STORAGE_KEY = 'moo_saved_playlists';
+let wakeLock = null;
+let wakeLockEnabled = 'wakeLock' in navigator;
+
+async function requestWakeLock() {
+  if (!wakeLockEnabled || wakeLock || el.audioPlayer.paused || el.audioPlayer.ended || document.hidden) {
+    return;
+  }
+
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+    });
+  }
+  catch (error) {
+    wakeLockEnabled = false;
+    console.error(error);
+  }
+}
+
+async function releaseWakeLock() {
+  if (!wakeLock) {
+    return;
+  }
+
+  try {
+    await wakeLock.release();
+  }
+  catch (error) {
+    console.error(error);
+  }
+  finally {
+    wakeLock = null;
+  }
+}
 
 
 function syncDetailsVisibility() {
   el.detailsToggleBtn.setAttribute('aria-expanded', state.detailsExpanded ? 'true' : 'false');
+  el.detailsChevron.textContent = state.detailsExpanded ? 'arrow_drop_up' : 'arrow_drop_down';
   el.detailsPanel.hidden = !state.detailsExpanded;
+}
+
+function syncPlaylistsVisibility() {
+  el.playlistsToggleBtn.setAttribute('aria-expanded', state.playlistsExpanded ? 'true' : 'false');
+  el.playlistsChevron.textContent = state.playlistsExpanded ? 'arrow_drop_up' : 'arrow_drop_down';
+  el.playlistsSearchInput.hidden = !state.playlistsExpanded;
+  el.playlistsPanel.classList.toggle('is-collapsed', !state.playlistsExpanded);
+  const playlistsCard = el.playlistsPanel.closest('.playlists-card');
+  if (playlistsCard) {
+    playlistsCard.classList.toggle('is-expanded', state.playlistsExpanded);
+  }
+}
+
+function syncContentFilterButtons() {
+  el.showDirectoriesBtn.setAttribute('aria-pressed', state.showDirectories ? 'true' : 'false');
+  el.showFilesBtn.setAttribute('aria-pressed', state.showFiles ? 'true' : 'false');
 }
 
 function setStatus(message, isError = false) {
@@ -110,6 +212,272 @@ function applyTheme() {
 function setThemeMode(mode) {
   state.themeMode = mode;
   applyTheme();
+}
+
+function switchMode(mode) {
+  if (mode !== 'browse' && mode !== 'library') {
+    return;
+  }
+
+  state.mode = mode;
+
+  // Update button states
+  const isBrowseMode = mode === 'browse';
+  el.browseModeBtn.setAttribute('aria-pressed', isBrowseMode ? 'true' : 'false');
+  el.libraryModeBtn.setAttribute('aria-pressed', !isBrowseMode ? 'true' : 'false');
+
+  // Update description
+  el.modeDescription.textContent = isBrowseMode
+    ? 'Explore les supports pour lancer les médias immédiatement'
+    : 'Consulte la bibliothèque indexée et crée des playlists';
+
+  // Update sidebar visibility
+  el.browseSidebar.hidden = !isBrowseMode;
+  el.librarySidebar.hidden = isBrowseMode;
+
+  // Update toolbar visibility
+  el.browseToolbar.hidden = !isBrowseMode;
+  el.libraryToolbar.hidden = isBrowseMode;
+
+  // Update content area visibility
+  el.browseContent.hidden = !isBrowseMode;
+  el.libraryContent.hidden = isBrowseMode;
+
+  if (isBrowseMode) {
+    // Initialize browse mode if needed
+    if (!state.drives.length) {
+      initializeBrowseMode();
+    }
+  } else {
+    // Initialize library mode if needed
+    if (!state.libraryTracks.length) {
+      initializeLibraryMode();
+    }
+  }
+}
+
+function initializeBrowseMode() {
+  // Will be called when switching to browse mode
+  setStatus('Mode Parcourir activé');
+}
+
+function initializeLibraryMode() {
+  // Will be called when switching to library mode
+  el.libraryLoader.hidden = false;
+  el.libraryEmptyState.hidden = true;
+  el.libraryList.innerHTML = '';
+  el.librarySubtitle.textContent = 'Chargement...';
+  
+  // Load library tracks from database
+  loadLibraryTracks();
+}
+
+async function loadLibraryTracks(page = 1) {
+  try {
+    el.libraryLoader.hidden = false;
+    el.libraryEmptyState.hidden = true;
+    el.libraryList.innerHTML = '';
+    el.libraryIndexStatus.textContent = 'Chargement...';
+    
+    state.libraryPage = page;
+    
+    // Build query filters
+    const filters = [];
+    
+    // TODO: Add category filters if needed
+    // if (state.libraryCategory !== 'all') { ... }
+    
+    // Build the request
+    const offset = (page - 1) * state.libraryPageSize;
+    const params = new URLSearchParams({
+      get: 'core_model_collect',
+      entity: 'moomuse\\Track',
+      limit: state.libraryPageSize,
+      start: offset,
+      order: 'title',
+      fields: '{id,artist,title,album}'
+    });
+    
+    // Add search filter if present
+    if (state.libraryQuery.trim()) {
+      params.append('search', state.libraryQuery.trim());
+    }
+    
+    const response = await fetch(`/?${params.toString()}`);
+    const result = await response.json();
+    const collection = Array.isArray(result) ? result : [];
+
+    state.libraryTracks = collection;
+    state.libraryTotalCount = collection.length;
+    
+    updateLibraryUI();
+    renderLibraryList();
+    el.libraryLoader.hidden = true;
+    
+    if (state.libraryTracks.length === 0) {
+      el.libraryEmptyState.hidden = false;
+      el.librarySubtitle.textContent = state.libraryPage === 1 
+        ? 'Aucun titre indexé pour le moment'
+        : 'Fin de la liste';
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement de la bibliothèque:', error);
+    el.librarySubtitle.textContent = 'Erreur lors du chargement';
+    el.libraryLoader.hidden = true;
+  }
+}
+
+function renderLibraryList() {
+  el.libraryList.innerHTML = '';
+  
+  state.libraryTracks.forEach((track, index) => {
+    const trackItem = document.createElement('div');
+    trackItem.className = 'library-track-item';
+    trackItem.dataset.trackId = track.id || '';
+    
+    const artist = track.artist || 'Artiste inconnu';
+    const title = track.title || track.name || 'Titre inconnu';
+    const album = track.album || '';
+    
+    trackItem.innerHTML = `
+      <div class="track-item-content">
+        <div class="track-item-primary">
+          <span class="track-title">${escapeHtml(title)}</span>
+        </div>
+        <div class="track-item-secondary">
+          <span class="track-artist">${escapeHtml(artist)}</span>
+          ${album ? `<span class="track-album">${escapeHtml(album)}</span>` : ''}
+        </div>
+      </div>
+      <div class="track-item-actions">
+        <button class="icon-button library-track-play" type="button" aria-label="Lire" title="Lire">
+          <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+        </button>
+      </div>
+    `;
+    
+    // Play button
+    trackItem.querySelector('.library-track-play').addEventListener('click', () => {
+      playTrackFromLibrary(track, index);
+    });
+    
+    // Click to select/play
+    trackItem.addEventListener('click', () => {
+      playTrackFromLibrary(track, index);
+    });
+    
+    el.libraryList.appendChild(trackItem);
+  });
+  
+  renderLibraryPagination();
+}
+
+function renderLibraryPagination() {
+  const totalPages = Math.ceil(state.libraryTotalCount / state.libraryPageSize);
+  
+  if (totalPages <= 1) {
+    return;
+  }
+  
+  let paginationHtml = '<div class="library-pagination">';
+  
+  // Previous button
+  if (state.libraryPage > 1) {
+    paginationHtml += `<button class="button pagination-btn" data-page="${state.libraryPage - 1}">← Précédente</button>`;
+  }
+  
+  // Page info
+  paginationHtml += `<span class="pagination-info">Page ${state.libraryPage} / ${totalPages}</span>`;
+  
+  // Next button
+  if (state.libraryPage < totalPages) {
+    paginationHtml += `<button class="button pagination-btn" data-page="${state.libraryPage + 1}">Suivante →</button>`;
+  }
+  
+  paginationHtml += '</div>';
+  
+  const paginationDiv = document.createElement('div');
+  paginationDiv.innerHTML = paginationHtml;
+  el.libraryList.appendChild(paginationDiv);
+  
+  // Attach pagination button listeners
+  paginationDiv.querySelectorAll('.pagination-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = parseInt(btn.dataset.page);
+      loadLibraryTracks(page);
+      el.libraryList.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+}
+
+async function fetchLibraryTrackPlaybackFile(track) {
+  const params = new URLSearchParams({
+    get: 'core_model_read',
+    entity: 'moomuse\\Track',
+    ids: track.id,
+    fields: '{id,full_path,path,filename,extension,size}'
+  });
+
+  const response = await fetch(`/?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const result = await response.json();
+  const record = Array.isArray(result) ? result[0] : null;
+
+  const playbackPath = record?.full_path || record?.path;
+  if (!playbackPath) {
+    throw new Error('missing_full_path');
+  }
+
+  const normalizedPath = String(playbackPath);
+  const filename = record?.filename || normalizedPath.split(/[\\/]/).pop() || track.name || track.title || 'media';
+  const extension = record?.extension || (filename.includes('.') ? filename.split('.').pop().toLowerCase() : '');
+
+  const file = {
+    name: track.title || track.name || filename,
+    path: normalizedPath,
+    type: 'file',
+    extension,
+    size: record?.size ?? null,
+    modified: null
+  };
+
+  state.fileRegistry[normalizedPath] = file;
+  return file;
+}
+
+async function playTrackFromLibrary(track, index) {
+  try {
+    const file = await fetchLibraryTrackPlaybackFile(track);
+    state.currentTrack = file;
+    state.currentPlaylistIndex = state.playlist.indexOf(file.path);
+    renderPlayer(true);
+    renderPlaylist();
+    renderSavedPlaylists();
+    setStatus(`Lecture : ${file.name}`);
+  }
+  catch (error) {
+    console.error(error);
+    setStatus('Impossible de lire cette piste depuis la bibliothèque.', true);
+  }
+}
+
+function updateLibraryUI() {
+  // Update counts
+  el.libraryTrackCount.textContent = state.libraryTracks.length;
+  
+  // Count unique artists and albums
+  const artists = new Set();
+  const albums = new Set();
+  state.libraryTracks.forEach(track => {
+    if (track.artist) artists.add(track.artist);
+    if (track.album) albums.add(track.album);
+  });
+  
+  el.libraryArtistCount.textContent = artists.size;
+  el.libraryAlbumCount.textContent = albums.size;
 }
 
 function updateNowPlayingTitle(title) {
@@ -154,10 +522,38 @@ function normalizePlaylistName(name) {
   return trimmed || 'Playlist sans nom';
 }
 
+function normalizePlaylistAuthor(author) {
+  return String(author || '').trim();
+}
+
+function normalizePlaylistDescription(description) {
+  return String(description || '').trim();
+}
+
+function normalizePlaylistRecord(item, fallback = {}) {
+  const tracks = Array.isArray(item?.tracks)
+    ? item.tracks.filter((track) => typeof track === 'string')
+    : Array.isArray(item)
+      ? item.filter((track) => typeof track === 'string')
+      : Array.isArray(fallback.tracks)
+        ? fallback.tracks.filter((track) => typeof track === 'string')
+        : [];
+
+  return {
+    id: typeof item?.id === 'string' && item.id ? item.id : (fallback.id || makePlaylistId()),
+    name: normalizePlaylistName(item?.name ?? fallback.name),
+    author: normalizePlaylistAuthor(item?.author ?? fallback.author),
+    description: normalizePlaylistDescription(item?.description ?? fallback.description),
+    tracks
+  };
+}
+
 function getSavedPlaylistItems() {
   const currentEntry = {
     id: 'current',
-    name: 'Playlist courante',
+    name: normalizePlaylistName(state.currentPlaylistMeta.name),
+    author: normalizePlaylistAuthor(state.currentPlaylistMeta.author),
+    description: normalizePlaylistDescription(state.currentPlaylistMeta.description),
     tracks: [...state.playlist],
     system: true
   };
@@ -187,12 +583,8 @@ function loadSavedPlaylists() {
     }
 
     state.savedPlaylists = parsed
-      .filter((item) => item && typeof item.name === 'string' && Array.isArray(item.tracks))
-      .map((item) => ({
-        id: typeof item.id === 'string' && item.id ? item.id : makePlaylistId(),
-        name: normalizePlaylistName(item.name),
-        tracks: item.tracks.filter((track) => typeof track === 'string')
-      }));
+      .filter((item) => item && ((typeof item.name === 'string' && Array.isArray(item.tracks)) || Array.isArray(item)))
+      .map((item) => normalizePlaylistRecord(item));
   }
   catch (error) {
     console.error(error);
@@ -219,23 +611,29 @@ function syncFilteredSavedPlaylists() {
 function renderSavedPlaylists() {
   syncFilteredSavedPlaylists();
 
-  if (!state.filteredSavedPlaylists.length) {
+  const itemsToRender = state.playlistsExpanded
+    ? state.filteredSavedPlaylists
+    : getSavedPlaylistItems().filter((playlist) => playlist.id === 'current');
+
+  if (!itemsToRender.length) {
     el.playlistsPanel.className = 'playlists-list muted';
     el.playlistsPanel.innerHTML = 'Aucune playlist correspondante.';
+    syncPlaylistsVisibility();
     return;
   }
 
   el.playlistsPanel.className = 'playlists-list';
-  el.playlistsPanel.innerHTML = state.filteredSavedPlaylists.map((playlist) => {
+  el.playlistsPanel.innerHTML = itemsToRender.map((playlist) => {
     const activeClass = state.activeSavedPlaylistId === playlist.id ? ' is-active' : '';
     const countLabel = `${playlist.tracks.length} fichier(s)`;
+    const detailLabel = playlist.author || playlist.description || countLabel;
 
     return `
       <button class="playlists-item${activeClass}" type="button" data-playlist-id="${escapeHtml(playlist.id)}">
         <span class="playlists-item-main">
           <span class="playlists-item-title">${escapeHtml(playlist.name)}</span>
-          <span class="playlists-item-meta">· ${escapeHtml(countLabel)}</span>
         </span>
+        <span class="playlists-item-meta">${escapeHtml(detailLabel)}</span>
       </button>`;
   }).join('');
 
@@ -254,6 +652,11 @@ function renderSavedPlaylists() {
       }
 
       state.playlist = [...playlist.tracks];
+      state.currentPlaylistMeta = {
+        name: playlist.name,
+        author: playlist.author || '',
+        description: playlist.description || ''
+      };
       state.activeSavedPlaylistId = playlist.id;
       syncCurrentTrackWithPlaylist();
       renderPlaylist();
@@ -261,9 +664,72 @@ function renderSavedPlaylists() {
       setStatus(`Playlist chargee : ${playlist.name}`);
     });
   });
+
+  syncPlaylistsVisibility();
 }
 
-function saveNamedPlaylist(name, tracks) {
+function getActivePlaylistRecord() {
+  if (state.activeSavedPlaylistId === 'current') {
+    return getSavedPlaylistItems().find((playlist) => playlist.id === 'current') || null;
+  }
+
+  return state.savedPlaylists.find((playlist) => playlist.id === state.activeSavedPlaylistId) || null;
+}
+
+function openPlaylistEditModal() {
+  const playlist = getActivePlaylistRecord();
+  if (!playlist) {
+    setStatus('Aucune playlist a editer.', true);
+    return;
+  }
+
+  el.playlistNameInput.value = playlist.name || '';
+  el.playlistAuthorInput.value = playlist.author || '';
+  el.playlistDescriptionInput.value = playlist.description || '';
+  el.playlistEditModal.hidden = false;
+  closePlaylistMenu();
+  requestAnimationFrame(() => el.playlistNameInput.focus());
+}
+
+function closePlaylistEditModal() {
+  el.playlistEditModal.hidden = true;
+}
+
+function savePlaylistEdit() {
+  const playlist = getActivePlaylistRecord();
+  if (!playlist) {
+    closePlaylistEditModal();
+    return;
+  }
+
+  const payload = {
+    name: normalizePlaylistName(el.playlistNameInput.value),
+    author: normalizePlaylistAuthor(el.playlistAuthorInput.value),
+    description: normalizePlaylistDescription(el.playlistDescriptionInput.value)
+  };
+
+  state.currentPlaylistMeta = {
+    ...state.currentPlaylistMeta,
+    ...payload
+  };
+
+  if (state.activeSavedPlaylistId !== 'current') {
+    const index = state.savedPlaylists.findIndex((item) => item.id === state.activeSavedPlaylistId);
+    if (index >= 0) {
+      state.savedPlaylists.splice(index, 1, {
+        ...state.savedPlaylists[index],
+        ...payload
+      });
+      persistSavedPlaylists();
+    }
+  }
+
+  renderSavedPlaylists();
+  closePlaylistEditModal();
+  setStatus(`Playlist mise a jour : ${payload.name}`);
+}
+
+function saveNamedPlaylist(name, tracks, options = {}) {
   const normalizedTracks = Array.isArray(tracks) ? tracks.filter((track) => typeof track === 'string') : [];
   if (!normalizedTracks.length) {
     return;
@@ -271,11 +737,14 @@ function saveNamedPlaylist(name, tracks) {
 
   const normalizedName = normalizePlaylistName(name);
   const existingIndex = state.savedPlaylists.findIndex((playlist) => playlist.name === normalizedName);
-  const payload = {
-    id: existingIndex >= 0 ? state.savedPlaylists[existingIndex].id : makePlaylistId(),
+  const existing = existingIndex >= 0 ? state.savedPlaylists[existingIndex] : null;
+  const payload = normalizePlaylistRecord({
+    id: existing?.id,
     name: normalizedName,
+    author: options.author ?? existing?.author ?? '',
+    description: options.description ?? existing?.description ?? '',
     tracks: normalizedTracks
-  };
+  }, { id: makePlaylistId() });
 
   if (existingIndex >= 0) {
     state.savedPlaylists.splice(existingIndex, 1, payload);
@@ -381,8 +850,8 @@ function updateEmptyState() {
     return;
   }
 
-  const hasDirectories = state.filteredDirectories.length > 0;
-  const hasFiles = state.filteredFiles.length > 0;
+  const hasDirectories = state.showDirectories && state.filteredDirectories.length > 0;
+  const hasFiles = state.showFiles && state.filteredFiles.length > 0;
   el.emptyState.hidden = hasDirectories || hasFiles;
 }
 
@@ -433,6 +902,8 @@ function refreshContentView() {
   syncFilteredEntries();
   renderDirectories();
   renderFilesList();
+  el.directoriesList.hidden = !state.showDirectories;
+  el.filesList.hidden = !state.showFiles;
   updateCounters();
   updateEmptyState();
 }
@@ -843,7 +1314,12 @@ function renderPlaylist() {
 }
 
 function exportPlaylist() {
-  const payload = JSON.stringify(state.playlist, null, 2);
+  const payload = JSON.stringify({
+    name: state.currentPlaylistMeta.name || 'Playlist exportee',
+    author: state.currentPlaylistMeta.author || '',
+    description: state.currentPlaylistMeta.description || '',
+    tracks: state.playlist
+  }, null, 2);
   const blob = new Blob([payload], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -870,7 +1346,12 @@ function togglePlaylistMenu() {
 }
 
 async function copyPlaylistJson() {
-  const payload = JSON.stringify(state.playlist, null, 2);
+  const payload = JSON.stringify({
+    name: state.currentPlaylistMeta.name || 'Playlist courante',
+    author: state.currentPlaylistMeta.author || '',
+    description: state.currentPlaylistMeta.description || '',
+    tracks: state.playlist
+  }, null, 2);
 
   try {
     await navigator.clipboard.writeText(payload);
@@ -906,17 +1387,24 @@ function syncCurrentTrackWithPlaylist() {
 
 function importPlaylistFromText(content) {
   const parsed = JSON.parse(content);
-  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== 'string')) {
+  const playlist = normalizePlaylistRecord(parsed, { name: 'Playlist importee' });
+  if (!Array.isArray(playlist.tracks) || playlist.tracks.some((item) => typeof item !== 'string')) {
     throw new Error('invalid_playlist_format');
   }
 
-  state.playlist = [...parsed];
+  state.playlist = [...playlist.tracks];
+  state.currentPlaylistMeta = {
+    name: playlist.name,
+    author: playlist.author || '',
+    description: playlist.description || ''
+  };
   state.activeSavedPlaylistId = 'current';
   syncCurrentTrackWithPlaylist();
   renderPlaylist();
   renderSavedPlaylists();
   closePlaylistMenu();
   setStatus(`Playlist importee : ${state.playlist.length} fichier(s)`);
+  return playlist;
 }
 
 function ensureTrackInPlaylist(path) {
@@ -947,11 +1435,17 @@ function playPlaylistIndex(index, autoPlay = true) {
 }
 
 function playFile(path) {
-  const index = ensureTrackInPlaylist(path);
-  if (index === -1) {
+  const file = getFileFromRegistry(path);
+  if (!file) {
     return;
   }
-  playPlaylistIndex(index, true);
+
+  state.currentTrack = file;
+  state.currentPlaylistIndex = state.playlist.indexOf(path);
+  renderPlayer(true);
+  renderPlaylist();
+  renderSavedPlaylists();
+  setStatus(`Lecture : ${file.name}`);
 }
 
 function renderPlayer(autoPlay = false) {
@@ -969,7 +1463,7 @@ function renderPlayer(autoPlay = false) {
   el.detailsPanel.innerHTML = `
     <div><strong>Nom</strong><br>${escapeHtml(file.name)}</div>
     <div class="details-spacer"></div>
-    <div><strong>Chemin</strong><br><span class="muted">${escapeHtml(file.path)}</span></div>
+    <div><strong>Chemin</strong><br><span class="muted" style="display: inline-block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</span></div>
     <div class="details-spacer"></div>
     <div><strong>Extension</strong><br>${escapeHtml(file.extension || '-')}</div>
     <div class="details-spacer"></div>
@@ -1035,8 +1529,23 @@ el.pathInput.addEventListener('keydown', (event) => {
   }
 });
 el.searchInput.addEventListener('input', applyFilter);
+el.showDirectoriesBtn.addEventListener('click', () => {
+  state.showDirectories = !state.showDirectories;
+  syncContentFilterButtons();
+  refreshContentView();
+});
+el.showFilesBtn.addEventListener('click', () => {
+  state.showFiles = !state.showFiles;
+  syncContentFilterButtons();
+  refreshContentView();
+});
 el.playlistsSearchInput.addEventListener('input', () => {
   state.playlistsQuery = el.playlistsSearchInput.value;
+  renderSavedPlaylists();
+});
+el.playlistsToggleBtn.addEventListener('click', () => {
+  state.playlistsExpanded = !state.playlistsExpanded;
+  syncPlaylistsVisibility();
   renderSavedPlaylists();
 });
 el.themeDarkBtn.addEventListener('click', () => {
@@ -1048,6 +1557,24 @@ el.themeLightBtn.addEventListener('click', () => {
 el.themeAutoBtn.addEventListener('click', () => {
   setThemeMode('auto');
 });
+
+// Mode switching
+el.browseModeBtn.addEventListener('click', () => {
+  switchMode('browse');
+});
+el.libraryModeBtn.addEventListener('click', () => {
+  switchMode('library');
+});
+el.libraryRefreshBtn.addEventListener('click', () => {
+  loadLibraryTracks();
+});
+el.librarySearchInput.addEventListener('input', () => {
+  state.libraryQuery = el.librarySearchInput.value;
+  // Reset to page 1 when searching
+  loadLibraryTracks(1);
+});
+
+// Playlist mode buttons
 el.playlistRandomBtn.addEventListener('click', () => {
   state.randomMode = !state.randomMode;
   syncPlaylistModeButtons();
@@ -1060,6 +1587,9 @@ el.playlistRepeatBtn.addEventListener('click', () => {
 el.playlistMenuBtn.addEventListener('click', (event) => {
   event.stopPropagation();
   togglePlaylistMenu();
+});
+el.editPlaylistBtn.addEventListener('click', () => {
+  openPlaylistEditModal();
 });
 el.copyPlaylistJsonBtn.addEventListener('click', () => {
   copyPlaylistJson();
@@ -1081,14 +1611,30 @@ el.importPlaylistInput.addEventListener('change', async (event) => {
 
   try {
     const content = await file.text();
-    importPlaylistFromText(content);
-    saveNamedPlaylist(file.name.replace(/\.json$/i, ''), state.playlist);
+    const playlist = importPlaylistFromText(content);
+    saveNamedPlaylist(
+      playlist.name || file.name.replace(/\.json$/i, ''),
+      playlist.tracks,
+      {
+        author: playlist.author,
+        description: playlist.description
+      }
+    );
   }
   catch (error) {
     console.error(error);
     closePlaylistMenu();
     setStatus('Import impossible : JSON de playlist invalide.', true);
   }
+});
+el.closePlaylistEditBtn.addEventListener('click', () => {
+  closePlaylistEditModal();
+});
+el.cancelPlaylistEditBtn.addEventListener('click', () => {
+  closePlaylistEditModal();
+});
+el.savePlaylistEditBtn.addEventListener('click', () => {
+  savePlaylistEdit();
 });
 el.audioPlayer.addEventListener('ended', () => {
   const nextIndex = state.currentPlaylistIndex + 1;
@@ -1099,6 +1645,12 @@ el.audioPlayer.addEventListener('ended', () => {
     playPlaylistIndex(0, true);
   }
 });
+el.audioPlayer.addEventListener('play', () => {
+  requestWakeLock();
+});
+el.audioPlayer.addEventListener('pause', () => {
+  releaseWakeLock();
+});
 el.detailsToggleBtn.addEventListener('click', () => {
   state.detailsExpanded = !state.detailsExpanded;
   syncDetailsVisibility();
@@ -1108,8 +1660,23 @@ document.addEventListener('click', (event) => {
     closePlaylistMenu();
   }
 });
+el.playlistEditModal.addEventListener('click', (event) => {
+  if (event.target === el.playlistEditModal) {
+    closePlaylistEditModal();
+  }
+});
 window.addEventListener('resize', () => {
   updateNowPlayingTitle(state.currentTrack ? state.currentTrack.name : 'Aucun media selectionne');
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    releaseWakeLock();
+    return;
+  }
+
+  if (!el.audioPlayer.paused && !el.audioPlayer.ended) {
+    requestWakeLock();
+  }
 });
 themeMediaQuery.addEventListener('change', () => {
   if (state.themeMode === 'auto') {
@@ -1120,6 +1687,8 @@ themeMediaQuery.addEventListener('change', () => {
 applyTheme();
 loadSavedPlaylists();
 syncDetailsVisibility();
+syncPlaylistsVisibility();
+syncContentFilterButtons();
 syncPlaylistModeButtons();
 renderSavedPlaylists();
 renderPlaylist();

@@ -36,6 +36,13 @@ class Track extends Model {
                 'help'              => 'References the root device owning this track.'
             ],
 
+            'drive_id' => [
+                'type'              => 'many2one',
+                'foreign_object'    => 'moomuse\Drive',
+                'description'       => 'Drive to which the track belongs.',
+                'help'              => 'References the mount point currently used to access this track.'
+            ],
+
             'directory_id' => [
                 'type'              => 'many2one',
                 'foreign_object'    => 'moomuse\Directory',
@@ -47,8 +54,17 @@ class Track extends Model {
             'path' => [
                 'type'              => 'string',
                 'usage'             => 'text/plain.small',
-                'description'       => 'Absolute normalized path of the audio file.',
-                'help'              => 'The full path used to locate the track on disk.'
+                'description'       => 'Relative normalized path of the audio file.',
+                'help'              => 'The relative path used to locate the track on the device.'
+            ],
+
+            'full_path' => [
+                'type'              => 'computed',
+                'result_type'       => 'string',
+                'usage'             => 'text/plain.small',
+                'function'          => 'calcFullPath',
+                'description'       => 'Relative normalized path of the audio file.',
+                'help'              => 'The relative path used to locate the track on the device.'
             ],
 
             'filename' => [
@@ -84,15 +100,42 @@ class Track extends Model {
                 'type'              => 'string',
                 'selection'         => [
                     'pending',
-                    'analyzed',
-                    'error'
+                    'candidate',
+                    'unknown',
+                    'ambiguous',
+                    'identified'
                 ],
                 'default'           => 'pending',
                 'description'       => 'Analysis status of the track.',
                 'help'              => 'Tracks whether the audio metadata has already been analyzed.'
             ],
 
-            'analyzed_at' => [
+            'title' => [
+                'type'              => 'string',
+                'description'       => 'Official title of the track.'
+            ],
+
+            'artist' => [
+                'type'              => 'string',
+                'description'       => 'Artist of the track.'
+            ],
+
+            'album' => [
+                'type'              => 'string',
+                'description'       => 'Album of the track.',
+            ],
+
+            'year' => [
+                'type'              => 'integer',
+                'description'       => 'Year of release of the track.'
+            ],
+
+            'duration' => [
+                'type'              => 'integer',
+                'description'       => 'Duration of the track in seconds.'
+            ],
+
+            'last_analyzed_at' => [
                 'type'              => 'datetime',
                 'description'       => 'Date and time of the last completed track analysis.',
                 'help'              => 'Stores when the track metadata was last analyzed.'
@@ -101,11 +144,23 @@ class Track extends Model {
         ];
     }
 
+    protected static function calcFullPath($self) {
+        $result = [];
+        $self->read(['drive_id' => ['mount_point'], 'path']);
+        foreach($self as $id => $track) {
+            $mountPoint = $track['drive_id']['mount_point'] ?? null;
+            $result[$id] = $mountPoint ? rtrim($mountPoint, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($track['path'], DIRECTORY_SEPARATOR) : null;
+        }
+        return $result;
+    }
+
     public function getIndexes(): array {
         return [
             ['device_id'],
+            ['drive_id'],
             ['directory_id'],
             ['path']
         ];
     }
+
 }

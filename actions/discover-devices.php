@@ -39,7 +39,7 @@ foreach(eQual::run('get', 'moomuse_drives') ?? [] as $drive) {
     $path = isset($drive['path']) ? realpath($drive['path']) ?: $drive['path'] : null;
     $device_uuid = strtolower((string) $drive['uuid']);
 
-    $device = Device::search(['uuid', '=', $device_uuid])->read(['id', 'path'])->first();
+    $device = Device::search(['uuid', '=', $device_uuid])->read(['id', 'uuid'])->first();
 
     if(!$device) {
         $device = Device::create([
@@ -48,8 +48,19 @@ foreach(eQual::run('get', 'moomuse_drives') ?? [] as $drive) {
             ->first();
         ++$result['devices_created'];
     }
+    else {
+        ++$result['devices_updated'];
+    }
 
-    $driveRecord = Drive::search(['path', '=', $path])->read(['id'])->first();
+    $driveRecord = null;
+    if($path) {
+        $driveRecord = Drive::search([
+                ['device_id', '=', $device['id']],
+                ['mount_point', '=', $path]
+            ])
+            ->read(['id'])
+            ->first();
+    }
 
     $drive_values = [
         'name'          => $name,

@@ -1,0 +1,23 @@
+{
+    "name": "Playlists",
+    "description": "Default list view for playlists.",
+    "layout": {
+        "items": [
+            {
+                "type": "field",
+                "value": "name",
+                "width": "35%"
+            },
+            {
+                "type": "field",
+                "value": "author",
+                "width": "25%"
+            },
+            {
+                "type": "field",
+                "value": "description",
+                "width": "40%"
+            }
+        ]
+    }
+}

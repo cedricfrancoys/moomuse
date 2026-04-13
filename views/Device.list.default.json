@@ -1,0 +1,38 @@
+{
+    "name": "Devices",
+    "description": "Default list view for devices.",
+    "actions": [
+        {
+            "id": "action.discover_devices",
+            "label": "Discover devices",
+            "description": "Discover available drives and create missing devices and mounts.",
+            "controller": "moomuse_discover-devices"
+        }
+    ],
+    "layout": {
+        "items": [
+            {
+                "type": "field",
+                "value": "name",
+                "width": "35%"
+            },
+            {
+                "type": "field",
+                "value": "uuid",
+                "width": "35%"
+            },
+            {
+                "type": "field",
+                "value": "status",
+                "width": "15%",
+                "sortable": true
+            },
+            {
+                "type": "field",
+                "value": "scanned_at",
+                "width": "15%",
+                "sortable": true
+            }
+        ]
+    }
+}

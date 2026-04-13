@@ -43,7 +43,7 @@ $isAudioExt = function(string $extension): bool {
 };
 
 if(strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-    if (!is_dir($basePath)) {
+    if(!is_dir($basePath)) {
         throw new Exception("path_not_found", EQ_ERROR_INVALID_PARAM);
     }
 }

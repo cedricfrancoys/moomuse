@@ -28,6 +28,17 @@ class Playlist extends Model {
                 'help'              => 'The name of the playlist.'
             ],
 
+            'author' => [
+                'type'              => 'string',
+                'description'       => 'The author of the playlist.'
+            ],
+
+            'description' => [
+                'type'              => 'string',
+                'type'              => 'text/plain.small',
+                'description'       => 'Optional description of the playlist.'
+            ],
+
             'tracks_ids' => [
                 'type'              => 'many2many',
                 'foreign_object'    => 'moomuse\Track',

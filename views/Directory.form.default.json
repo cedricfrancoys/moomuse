@@ -1,0 +1,84 @@
+{
+    "name": "Directories",
+    "description": "Default form view for directories.",
+    "actions": [
+        {
+            "id": "action.scan",
+            "inline": true,
+            "label": "Scan",
+            "icon": "sync",
+            "description": "Scan known directories and create missing child directories and tracks.",
+            "controller": "moomuse_Directory_scan",
+            "params": {
+                "id": "object.id"
+            }
+        }
+    ],
+    "layout": {
+        "groups": [
+            {
+                "sections": [
+                    {
+                        "rows": [
+                            {
+                                "columns": [
+                                    {
+                                        "width": "50%",
+                                        "items": [
+                                            {
+                                                "type": "field",
+                                                "value": "name",
+                                                "width": "100%"
+                                            },
+                                            {
+                                                "type": "field",
+                                                "value": "path",
+                                                "width": "100%",
+                                                "widget": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            {
+                                                "type": "field",
+                                                "value": "full_path",
+                                                "width": "100%",
+                                                "widget": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            {
+                                                "type": "field",
+                                                "value": "device_id",
+                                                "width": "100%"
+                                            },
+                                            {
+                                                "type": "field",
+                                                "value": "parent_id",
+                                                "width": "100%"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "width": "50%",
+                                        "items": [
+                                            {
+                                                "type": "field",
+                                                "value": "status",
+                                                "width": "50%"
+                                            },
+                                            {
+                                                "type": "field",
+                                                "value": "last_scanned_at",
+                                                "width": "50%"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

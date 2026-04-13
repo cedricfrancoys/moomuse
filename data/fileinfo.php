@@ -46,14 +46,17 @@ $tokenize = fn($str) => !$str
     ? []
     : array_values(array_filter(preg_split('/[^a-z0-9]+/', strtolower(TextTransformer::toAscii($str)))));
 
-$extractCandidates = function ($str) {
-    if(!$str || !preg_match('/(.+?)\s*-\s*(.+)/', $str, $matches)) {
+$artistTitleSeparatorPattern = '/(.+?)\s+-\s+(.+)/';
+
+$extractCandidates = function ($str) use ($artistTitleSeparatorPattern) {
+    if(!$str || !preg_match($artistTitleSeparatorPattern, $str, $matches)) {
         return [];
     }
 
     return [[
         'artist' => trim($matches[1]),
         'title'  => trim($matches[2]),
+        'album'  => null,
     ]];
 };
 
@@ -69,13 +72,13 @@ $removeArtistFromTitle = function ($artist, $title) use ($tokenize) {
         return $title;
     }
 
-    $newTitle = preg_replace('/^' . preg_quote($artist, '/') . '\s*-\s*/i', '', $title);
+    $newTitle = preg_replace('/^' . preg_quote($artist, '/') . '\s+-\s+/i', '', $title);
 
     if ($newTitle === $title) {
         $newTitle = trim(preg_replace('/' . preg_quote($artist, '/') . '/i', '', $title));
     }
 
-    $newTitle = trim(preg_replace('/^\s*-\s*/', '', $newTitle));
+    $newTitle = trim(preg_replace('/^\s+-\s+/', '', $newTitle));
 
     return $newTitle ?: $title;
 };
@@ -85,6 +88,7 @@ $scoreCandidate = function ($candidate, $sources) use ($tokenize) {
 
     $artistTokens = $tokenize($candidate['artist']);
     $titleTokens  = $tokenize($candidate['title']);
+    $albumTokens  = $tokenize($candidate['album'] ?? '');
 
     foreach($sources as $key => $src) {
         if (!$src) continue;
@@ -104,9 +108,11 @@ $scoreCandidate = function ($candidate, $sources) use ($tokenize) {
             $tokens = $tokenize($value);
             $artistMatch = count(array_intersect($artistTokens, $tokens));
             $titleMatch  = count(array_intersect($titleTokens, $tokens));
+            $albumMatch  = count(array_intersect($albumTokens, $tokens));
 
             $score += $artistMatch * 2 * $weight;
             $score += $titleMatch * $weight;
+            $score += $albumMatch * max(1, $weight - 1);
         }
     }
 
@@ -186,6 +192,7 @@ $result = $normalizeGetID3($info);
 $sources = [
     'title'         => $cleanNoise($result['common']['title'] ?? ''),
     'artist'        => $cleanNoise($result['common']['artist'] ?? ''),
+    'album'         => $cleanNoise($result['common']['album'] ?? ''),
     'filename'      => $cleanNoise(pathinfo($file, PATHINFO_FILENAME)),
     'path_parts'    => array_values(array_map(
             $cleanNoise,
@@ -205,7 +212,16 @@ $candidates = [
 if($sources['artist'] && $sources['title']) {
     $candidates[] = [
         'artist' => $sources['artist'],
-        'title'  => $sources['title']
+        'title'  => $sources['title'],
+        'album'  => $sources['album'] ?: ($sources['path_parts'][1] ?? null)
+    ];
+}
+
+if($sources['title']) {
+    $candidates[] = [
+        'artist' => $sources['artist'] ?: ($sources['path_parts'][2] ?? $sources['path_parts'][1] ?? null),
+        'title'  => $sources['title'],
+        'album'  => $sources['album'] ?: ($sources['path_parts'][1] ?? null)
     ];
 }
 
@@ -214,6 +230,7 @@ foreach($candidates as &$candidate) {
         $candidate['artist'],
         $candidate['title']
     );
+    $candidate['album'] = $cleanNoise($candidate['album'] ?? '');
 }
 unset($candidate);
 

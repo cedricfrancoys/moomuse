@@ -35,12 +35,28 @@ class Directory extends Model {
                 'help'              => 'The relative path used to locate the directory on the device.'
             ],
 
+            'full_path' => [
+                'type'              => 'computed',
+                'result_type'       => 'string',
+                'usage'             => 'text/plain.small',
+                'function'          => 'calcFullPath',
+                'description'       => 'Relative normalized path of the audio file.',
+                'help'              => 'The relative path used to locate the track on the device.'
+            ],
+
             'device_id' => [
                 'type'              => 'many2one',
                 'foreign_object'    => 'moomuse\Device',
                 'required'          => true,
                 'description'       => 'Device to which the directory belongs.',
                 'help'              => 'References the root device owning this directory.'
+            ],
+
+            'drive_id' => [
+                'type'              => 'many2one',
+                'foreign_object'    => 'moomuse\Drive',
+                'description'       => 'Drive to which the directory belongs.',
+                'help'              => 'References the mount point currently used to access this directory.'
             ],
 
             'parent_id' => [
@@ -54,9 +70,7 @@ class Directory extends Model {
                 'type'              => 'string',
                 'selection'         => [
                     'pending',
-                    'in_progress',
-                    'scanned',
-                    'error'
+                    'scanned'
                 ],
                 'default'           => 'pending',
                 'description'       => 'Scanning status of the directory.',
@@ -88,9 +102,20 @@ class Directory extends Model {
         ];
     }
 
+    protected static function calcFullPath($self) {
+        $result = [];
+        $self->read(['drive_id' => ['mount_point'], 'path']);
+        foreach($self as $id => $track) {
+            $mountPoint = $track['drive_id']['mount_point'] ?? null;
+            $result[$id] = $mountPoint ? rtrim($mountPoint, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($track['path'], DIRECTORY_SEPARATOR) : null;
+        }
+        return $result;
+    }
+
     public function getIndexes(): array {
         return [
             ['device_id'],
+            ['drive_id'],
             ['parent_id'],
             ['path']
         ];

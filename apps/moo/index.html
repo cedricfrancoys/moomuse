@@ -10,12 +10,24 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand">
-        <h1>Device Explorer</h1>
-        <p>Prototype HTML pour explorer un support comme dans Windows Explorer et lancer un media immediatement.</p>
+      <div class="mode-switcher" role="radiogroup" aria-label="Mode de fonctionnement">
+        <button class="button mode-switch-btn" id="browseModeBtn" type="button" aria-pressed="true" title="Explorer les disques">
+          <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
+          <span>Explorer</span>
+        </button>
+        <button class="button mode-switch-btn" id="libraryModeBtn" type="button" aria-pressed="false" title="Consulter la bibliothèque">
+          <span class="material-symbols-outlined" aria-hidden="true">library_music</span>
+          <span>Bibliothèque</span>
+        </button>
       </div>
 
-      <div class="section-title">Supports</div>
+      <div class="brand">
+        <h1>MooMuse</h1>
+        <p id="modeDescription">Explore les supports pour lancer les médias immédiatement</p>
+      </div>
+
+      <div id="browseSidebar">
+        <div class="section-title">Supports</div>
       <div id="drivesList" class="tree"></div>
 
       <div class="sidebar-spacer" aria-hidden="true"></div>
@@ -24,67 +36,143 @@
         <div class="section-title">Dossiers du niveau courant</div>
         <div id="directoryTree" class="tree sidebar-directory-tree"></div>
       </div>
+      </div>
+
+      <div id="librarySidebar" hidden>
+        <div class="section-title">Catégories</div>
+        <div class="library-categories">
+          <button class="button ghost library-category-btn" type="button" data-category="all" aria-pressed="true">
+            <span class="material-symbols-outlined" aria-hidden="true">music_library_music</span>
+            Tous les titres
+          </button>
+          <button class="button ghost library-category-btn" type="button" data-category="artists">
+            <span class="material-symbols-outlined" aria-hidden="true">artist</span>
+            Artistes
+          </button>
+          <button class="button ghost library-category-btn" type="button" data-category="albums">
+            <span class="material-symbols-outlined" aria-hidden="true">album</span>
+            Albums
+          </button>
+        </div>
+
+        <div class="sidebar-spacer" aria-hidden="true"></div>
+
+        <div class="sidebar-current-directories">
+          <div class="section-title">Playlists</div>
+          <div id="libraryPlaylistsList" class="tree"></div>
+        </div>
+      </div>
     </aside>
 
     <header class="toolbar">
-      <div class="toolbar-row">
-        <button class="button" id="backBtn">Retour</button>
-        <button class="button" id="refreshBtn">Actualiser</button>
-        <input class="input" id="pathInput" type="text" placeholder="Chemin a explorer..." />
-        <button class="button primary" id="openBtn">Ouvrir</button>
+      <div id="browseToolbar">
+        <div class="toolbar-row">
+          <button class="button" id="backBtn">Retour</button>
+          <button class="button" id="refreshBtn">Actualiser</button>
+          <input class="input" id="pathInput" type="text" placeholder="Chemin a explorer..." />
+          <button class="button primary" id="openBtn">Ouvrir</button>
+        </div>
+        <div class="toolbar-row">
+          <input class="input" id="searchInput" type="text" placeholder="Filtrer dans le dossier courant : titre, nom de fichier..." />
+          <div class="content-filter-toggle" role="group" aria-label="Filtres d affichage">
+            <button class="button ghost filter-toggle-btn" id="showDirectoriesBtn" type="button" aria-pressed="true" title="Afficher les dossiers">
+              <span class="material-symbols-outlined" aria-hidden="true">folder</span>
+            </button>
+            <button class="button ghost filter-toggle-btn" id="showFilesBtn" type="button" aria-pressed="true" title="Afficher les fichiers">
+              <span class="material-symbols-outlined" aria-hidden="true">music_note</span>
+            </button>
+          </div>
+        </div>
+        <div class="pathbar" id="breadcrumbBar"></div>
       </div>
-      <div class="toolbar-row">
-        <input class="input" id="searchInput" type="text" placeholder="Filtrer dans le dossier courant : titre, nom de fichier..." />
-        <span class="search-hint">Filtrage local instantane. La recherche globale pourra etre branchee plus tard sur SQLite / index.</span>
+
+      <div id="libraryToolbar" hidden>
+        <div class="toolbar-row">
+          <input class="input library-search-input" id="librarySearchInput" type="text" placeholder="Rechercher par artiste, titre, album..." />
+          <button class="button" id="libraryRefreshBtn">Actualiser la DB</button>
+        </div>
+        <div class="toolbar-row">
+          <button class="button ghost" id="libraryIndexStatusBtn" type="button" disabled>
+            <span class="material-symbols-outlined" aria-hidden="true">info</span>
+            <span id="libraryIndexStatus">Calcul des indexés...</span>
+          </button>
+        </div>
       </div>
-      <div class="pathbar" id="breadcrumbBar"></div>
     </header>
 
     <main class="content">
-      <div class="content-header">
-        <div>
-          <h2 id="currentTitle">Exploration</h2>
-          <p class="muted" id="currentSubtitle">Aucun dossier charge</p>
+      <div id="browseContent">
+        <div class="content-header">
+          <div>
+            <h2 id="currentTitle">Exploration</h2>
+            <p class="muted" id="currentSubtitle">Aucun dossier charge</p>
+          </div>
+          <div class="tag-list">
+            <div class="tag"><span id="dirCount">0</span> dossiers</div>
+            <div class="tag"><span id="fileCount">0</span> medias</div>
+          </div>
         </div>
-        <div class="tag-list">
-          <div class="tag"><span id="dirCount">0</span> dossiers</div>
-          <div class="tag"><span id="fileCount">0</span> medias</div>
+
+        <div id="contentLoader" class="loader-panel" hidden>
+          <div class="loader-spinner" aria-hidden="true"></div>
+          <div id="loaderText" class="loader-text">Chargement du dossier...</div>
         </div>
+        <div id="directoriesList" class="content-grid"></div>
+        <div id="filesList" class="content-grid"></div>
+        <div id="emptyState" class="empty" hidden>Aucun media ou dossier trouve pour ce niveau.</div>
       </div>
 
-      <div id="contentLoader" class="loader-panel" hidden>
-        <div class="loader-spinner" aria-hidden="true"></div>
-        <div id="loaderText" class="loader-text">Chargement du dossier...</div>
+      <div id="libraryContent" hidden>
+        <div class="content-header">
+          <div>
+            <h2>Bibliothèque</h2>
+            <p class="muted" id="librarySubtitle">Chargement...</p>
+          </div>
+          <div class="tag-list">
+            <div class="tag"><span id="libraryTrackCount">0</span> titres</div>
+            <div class="tag"><span id="libraryArtistCount">0</span> artistes</div>
+            <div class="tag"><span id="libraryAlbumCount">0</span> albums</div>
+          </div>
+        </div>
+
+        <div id="libraryLoader" class="loader-panel" hidden>
+          <div class="loader-spinner" aria-hidden="true"></div>
+          <div id="libraryLoaderText" class="loader-text">Chargement de la bibliothèque...</div>
+        </div>
+        <div id="libraryList" class="content-grid"></div>
+        <div id="libraryEmptyState" class="empty" hidden>Aucun titre dans la bibliothèque.</div>
       </div>
-      <div id="directoriesList" class="content-grid"></div>
-      <div id="filesList" class="content-grid"></div>
-      <div id="emptyState" class="empty" hidden>Aucun media ou dossier trouve pour ce niveau.</div>
     </main>
 
     <aside class="player">
       <div class="player-panel">
+        <div class="theme-switcher" role="radiogroup" aria-label="Mode d affichage">
+          <button class="button ghost theme-toggle-btn" id="themeDarkBtn" type="button" aria-pressed="false" title="Dark" aria-label="Dark">
+            <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+          </button>
+          <button class="button ghost theme-toggle-btn" id="themeLightBtn" type="button" aria-pressed="false" title="Light" aria-label="Light">
+            <span class="material-symbols-outlined" aria-hidden="true">light_mode</span>
+          </button>
+          <button class="button ghost theme-toggle-btn" id="themeAutoBtn" type="button" aria-pressed="false">Auto</button>
+        </div>
+
         <div class="card now-playing">
-          <div class="theme-switcher" role="radiogroup" aria-label="Mode d affichage">
-            <button class="button ghost theme-toggle-btn" id="themeDarkBtn" type="button" aria-pressed="false" title="Dark" aria-label="Dark">
-              <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
-            </button>
-            <button class="button ghost theme-toggle-btn" id="themeLightBtn" type="button" aria-pressed="false" title="Light" aria-label="Light">
-              <span class="material-symbols-outlined" aria-hidden="true">light_mode</span>
-            </button>
-            <button class="button ghost theme-toggle-btn" id="themeAutoBtn" type="button" aria-pressed="false">Auto</button>
-          </div>
           <div class="section-title">Sélection</div>
           <h3 id="nowPlayingTitle">Aucun media selectionné</h3>
-          <button class="details-toggle" id="detailsToggleBtn" type="button" aria-expanded="false">
-            <span>Details</span>
-            <span id="detailsChevron" class="details-chevron">&#9662;</span>
+          <button class="icon-button details-icon-toggle" id="detailsToggleBtn" type="button" aria-expanded="false" aria-label="Afficher ou masquer les details">
+            <span id="detailsChevron" class="material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
           </button>
           <div id="detailsPanel" class="details-panel muted" hidden>Les informations du fichier selectionne apparaitront ici.</div>
         </div>
 
         <div class="card playlists-card">
-          <div class="section-title">Playlists</div>
-          <input class="input playlists-search" id="playlistsSearchInput" type="text" placeholder="Rechercher une playlist..." autocomplete="off" />
+          <div class="card-header">
+            <div class="section-title">Playlists</div>
+            <button class="icon-button card-toggle-btn" id="playlistsToggleBtn" type="button" aria-expanded="false" aria-label="Afficher ou masquer les playlists">
+              <span id="playlistsChevron" class="material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
+            </button>
+          </div>
+          <input class="input playlists-search" id="playlistsSearchInput" type="text" placeholder="Rechercher une playlist..." autocomplete="off" hidden />
           <div id="playlistsPanel" class="playlists-list muted">Aucune playlist disponible.</div>
         </div>
 
@@ -104,6 +192,7 @@
             <div class="playlist-menu-wrap">
               <button class="button ghost playlist-menu-trigger" id="playlistMenuBtn" type="button" aria-expanded="false">...</button>
               <div class="playlist-menu" id="playlistMenu" hidden>
+                <button class="playlist-menu-item" id="editPlaylistBtn" type="button">Edit</button>
                 <button class="playlist-menu-item" id="copyPlaylistJsonBtn" type="button">Copy JSON</button>
                 <button class="playlist-menu-item" id="exportPlaylistBtn" type="button">Export</button>
                 <button class="playlist-menu-item" id="importPlaylistBtn" type="button">Import</button>
@@ -126,6 +215,35 @@
   </div>
 
   <div id="snackbar" class="snackbar" hidden></div>
+
+  <div id="playlistEditModal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="playlistEditTitle">
+      <div class="modal-header">
+        <h3 id="playlistEditTitle">Edit Playlist</h3>
+        <button class="icon-button" id="closePlaylistEditBtn" type="button" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <label class="modal-field">
+          <span class="modal-label">Name</span>
+          <input class="input" id="playlistNameInput" type="text" />
+        </label>
+        <label class="modal-field">
+          <span class="modal-label">Author</span>
+          <input class="input" id="playlistAuthorInput" type="text" />
+        </label>
+        <label class="modal-field">
+          <span class="modal-label">Description</span>
+          <textarea class="input modal-textarea" id="playlistDescriptionInput"></textarea>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="button" id="cancelPlaylistEditBtn" type="button">Cancel</button>
+        <button class="button primary" id="savePlaylistEditBtn" type="button">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script src="./material.js"></script>
   <script src="./index.js"></script>

@@ -59,9 +59,7 @@ class Drive extends Model {
                 'type'              => 'string',
                 'selection'         => [
                     'pending',
-                    'in_progress',
-                    'scanned',
-                    'error'
+                    'scanned'
                 ],
                 'default'           => 'pending',
                 'description'       => 'Scanning status of the directory.',
@@ -72,6 +70,22 @@ class Drive extends Model {
                 'type'              => 'datetime',
                 'description'       => 'Date and time of the last completed directory scan.',
                 'help'              => 'Stores when the directory content was last scanned.'
+            ],
+
+            'directories_ids' => [
+                'type'              => 'one2many',
+                'foreign_object'    => 'moomuse\Directory',
+                'foreign_field'     => 'drive_id',
+                'description'       => 'Directories attached to this drive.',
+                'help'              => 'Lists the indexed directories that belong to this mount point.'
+            ],
+
+            'tracks_ids' => [
+                'type'              => 'one2many',
+                'foreign_object'    => 'moomuse\Track',
+                'foreign_field'     => 'drive_id',
+                'description'       => 'Tracks attached to this drive.',
+                'help'              => 'Lists the indexed tracks that belong to this mount point.'
             ]
         ];
     }

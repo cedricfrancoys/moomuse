@@ -16,7 +16,7 @@
             "name": "MooMuse",
             "extends": "app",
             "description": "MooMuse - Backend application.",
-            "icon": "storefront",
+            "icon": "queue_music",
             "color": "#f6bd04",
             "access": {
                 "groups": [

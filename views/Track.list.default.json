@@ -1,0 +1,62 @@
+{
+    "name": "Tracks",
+    "description": "Default list view for tracks.",
+    "actions": [
+        {
+            "id": "action.guess_candidate",
+            "inline": true,
+            "label": "Guess",
+            "icon": "psychology",
+            "description": "Analyze the track and guess the best title and artist candidate.",
+            "controller": "moomuse_Track_guess-candidate",
+            "params": {
+                "id": "object.id"
+            }
+        }
+    ],
+    "layout": {
+        "items": [
+            {
+                "type": "field",
+                "value": "name",
+                "width": "20%"
+            },
+            {
+                "type": "field",
+                "value": "filename",
+                "width": "20%"
+            },
+            {
+                "type": "field",
+                "value": "directory_id",
+                "width": "15%"
+            },
+            {
+                "type": "field",
+                "value": "extension",
+                "width": "10%"
+            },
+            {
+                "type": "field",
+                "value": "title",
+                "width": "20%"
+            },
+            {
+                "type": "field",
+                "value": "artist",
+                "width": "20%"
+            },
+            {
+                "type": "field",
+                "value": "album",
+                "width": "20%"
+            },
+            {
+                "type": "field",
+                "value": "status",
+                "width": "10%",
+                "sortable": true
+            }
+        ]
+    }
+}

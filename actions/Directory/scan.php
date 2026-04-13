@@ -7,10 +7,18 @@
 */
 
 use moomuse\Directory;
+use moomuse\Drive;
 use moomuse\Track;
 
 [$params, $providers] = eQual::announce([
-    'description'   => 'Scans all known directories and creates missing child directories and tracks.',
+    'description'   => 'Scans given directory and creates missing child directories and tracks.',
+    'params'        => [
+        'id' => [
+            'type'              => 'many2one',
+            'foreign_object'    => 'moomuse\Directory',
+            'required'          => true
+        ]
+    ],
     'access' => [
         'visibility' => 'public'
     ],
@@ -40,72 +48,112 @@ $findTrack = function(int $directoryId, string $path) {
         ->first();
 };
 
-foreach(Directory::search()->read(['id', 'name', 'path', 'device_id'])->get() ?? [] as $directory) {
-    $path = realpath($directory['path']);
+$isAudioExt = function(string $extension): bool {
+    return in_array($extension, ['aac', 'flac', 'm4a', 'mp2', 'mp3', 'mp4', 'ogg', 'opus', 'wav', 'wma'], true);
+};
 
-    if(!$path || !is_dir($path)) {
-        Directory::id($directory['id'])->update(['status' => 'error']);
+$joinPath = function(string $basePath, string $relativePath): string {
+    if($relativePath === '') {
+        return $basePath;
+    }
+
+    return rtrim($basePath, DIRECTORY_SEPARATOR . '/\\') . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+};
+
+$normalizeRelativePath = function(string $absolutePath, string $mountPoint): string {
+    $absolutePath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $absolutePath);
+    $mountPoint = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $mountPoint), DIRECTORY_SEPARATOR);
+
+    if($absolutePath === $mountPoint) {
+        return '';
+    }
+
+    return ltrim(substr($absolutePath, strlen($mountPoint)), DIRECTORY_SEPARATOR);
+};
+
+$normalizeRelativeDirectoryPath = function(string $absolutePath, string $mountPoint) use ($normalizeRelativePath): string {
+    $relativePath = $normalizeRelativePath($absolutePath, $mountPoint);
+
+    if($relativePath === '') {
+        return '';
+    }
+
+    return rtrim($relativePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+};
+
+$directory = Directory::id($params['id'])->read(['id', 'name', 'full_path', 'device_id', 'drive_id'])->first();
+
+if(!$directory) {
+    throw new Exception('unknown_directory', EQ_ERROR_UNKNOWN_OBJECT);
+}
+
+$drive = Drive::id($directory['drive_id'])->read(['mount_point'])->first();
+
+$directoriesResult = eQual::run('get', 'moomuse_directories', [
+    'path'  => $directory['full_path'],
+    'start' => 0,
+    'limit' => 10000
+]);
+
+foreach(($directoriesResult['directories'] ?? []) as $child) {
+    $childAbsolutePath = realpath($child['path']) ?: $child['path'];
+    $childPath = $normalizeRelativeDirectoryPath($childAbsolutePath, $drive['mount_point']);
+
+    if($findDirectory($directory['device_id'], $childPath)) {
         continue;
     }
 
-    Directory::id($directory['id'])->update(['status' => 'in_progress']);
-
-    $directoriesResult = eQual::run('get', 'moomuse_directories', [
-        'path'  => $path,
-        'start' => 0,
-        'limit' => 10000
+    Directory::create([
+        'name'            => $child['name'],
+        'path'            => $childPath,
+        'device_id'       => $directory['device_id'],
+        'drive_id'        => $directory['drive_id'],
+        'parent_id'       => $directory['id']
     ]);
 
-    foreach(($directoriesResult['directories'] ?? []) as $child) {
-        $childPath = realpath($child['path']) ?: $child['path'];
-
-        if($findDirectory($directory['device_id'], $childPath)) {
-            continue;
-        }
-
-        Directory::create([
-            'name'            => $child['name'],
-            'path'            => $childPath,
-            'device_id'       => $directory['device_id'],
-            'parent_id'       => $directory['id']
-        ])
-        ->read(['id'])
-        ->first(true);
-
-        ++$result['directories_created'];
-    }
-
-    $filesResult = eQual::run('get', 'moomuse_files', [
-        'path'  => $path,
-        'start' => 0,
-        'limit' => 10000
-    ]);
-
-    foreach(($filesResult['files'] ?? []) as $file) {
-        $filePath = realpath($file['path']) ?: $file['path'];
-
-        if($findTrack($directory['id'], $filePath)) {
-            continue;
-        }
-
-        Track::create([
-            'name'         => pathinfo($file['name'], PATHINFO_FILENAME),
-            'device_id'    => $directory['device_id'],
-            'directory_id' => $directory['id'],
-            'path'         => $filePath,
-            'filename'     => $file['name'],
-            'extension'    => strtolower($file['extension'] ?? pathinfo($file['name'], PATHINFO_EXTENSION)),
-            'size'         => $file['size'] ?? 0,
-            'status'       => 'pending',
-            'analyzed_at'  => null
-        ])
-        ->read(['id'])
-        ->first(true);
-
-        ++$result['tracks_created'];
-    }
-
+    ++$result['directories_created'];
 }
+
+$filesResult = eQual::run('get', 'moomuse_files', [
+    'path'  => $directory['full_path'],
+    'start' => 0,
+    'limit' => 10000
+]);
+
+foreach(($filesResult['files'] ?? []) as $file) {
+    $extension = strtolower($file['extension'] ?? pathinfo($file['name'], PATHINFO_EXTENSION));
+
+    if(!$isAudioExt($extension)) {
+        continue;
+    }
+
+    $fileAbsolutePath = realpath($file['path']) ?: $file['path'];
+    $filePath = $normalizeRelativePath($fileAbsolutePath, $drive['mount_point']);
+
+    if($findTrack($directory['id'], $filePath)) {
+        continue;
+    }
+
+    Track::create([
+        'name'         => pathinfo($file['name'], PATHINFO_FILENAME),
+        'device_id'    => $directory['device_id'],
+        'drive_id'     => $directory['drive_id'],
+        'directory_id' => $directory['id'],
+        'path'         => $filePath,
+        'filename'     => $file['name'],
+        'extension'    => $extension,
+        'size'         => $file['size'] ?? 0,
+    ]);
+
+    ++$result['tracks_created'];
+}
+
+Directory::id($directory['id'])
+    ->update([
+        'status'          => 'scanned',
+        'last_scanned_at' => time()
+    ]);
+
 
 $context->httpResponse()
     ->body($result)
