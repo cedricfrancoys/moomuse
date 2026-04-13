@@ -1064,11 +1064,11 @@ audio {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
+  border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.15s ease;
   background: var(--card-bg-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius);
   margin-bottom: 4px;
 }
 
@@ -1143,13 +1143,13 @@ audio {
 .library-pagination {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 16px;
-  margin-top: 12px;
-  background: var(--card-bg-subtle);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
 }
 
 .pagination-btn {
@@ -1158,10 +1158,20 @@ audio {
   font-weight: 500;
 }
 
+.pagination-btn.icon-only {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .pagination-info {
   font-size: 14px;
   color: var(--muted);
-  min-width: 160px;
+  min-width: 220px;
   text-align: center;
 }
 

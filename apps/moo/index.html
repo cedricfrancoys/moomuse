@@ -15,15 +15,15 @@
           <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
           <span>Explorer</span>
         </button>
-        <button class="button mode-switch-btn" id="libraryModeBtn" type="button" aria-pressed="false" title="Consulter la bibliothèque">
+        <button class="button mode-switch-btn" id="libraryModeBtn" type="button" aria-pressed="false" title="Consulter la bibliotheque">
           <span class="material-symbols-outlined" aria-hidden="true">library_music</span>
-          <span>Bibliothèque</span>
+          <span>Bibliotheque</span>
         </button>
       </div>
 
       <div class="brand">
         <h1>MooMuse</h1>
-        <p id="modeDescription">Explore les supports pour lancer les médias immédiatement</p>
+        <p id="modeDescription">Explore les supports pour lancer les medias immediatement</p>
       </div>
 
       <div id="browseSidebar">
@@ -39,7 +39,7 @@
       </div>
 
       <div id="librarySidebar" hidden>
-        <div class="section-title">Catégories</div>
+        <div class="section-title">Categories</div>
         <div class="library-categories">
           <button class="button ghost library-category-btn" type="button" data-category="all" aria-pressed="true">
             <span class="material-symbols-outlined" aria-hidden="true">music_library_music</span>
@@ -89,12 +89,8 @@
       <div id="libraryToolbar" hidden>
         <div class="toolbar-row">
           <input class="input library-search-input" id="librarySearchInput" type="text" placeholder="Rechercher par artiste, titre, album..." />
-          <button class="button" id="libraryRefreshBtn">Actualiser la DB</button>
-        </div>
-        <div class="toolbar-row">
-          <button class="button ghost" id="libraryIndexStatusBtn" type="button" disabled>
-            <span class="material-symbols-outlined" aria-hidden="true">info</span>
-            <span id="libraryIndexStatus">Calcul des indexés...</span>
+          <button class="icon-button" id="libraryRefreshBtn" type="button" aria-label="Rechercher" title="Rechercher">
+            <span class="material-symbols-outlined" aria-hidden="true">search</span>
           </button>
         </div>
       </div>
@@ -125,22 +121,13 @@
       <div id="libraryContent" hidden>
         <div class="content-header">
           <div>
-            <h2>Bibliothèque</h2>
+            <h2>Bibliotheque</h2>
             <p class="muted" id="librarySubtitle">Chargement...</p>
           </div>
-          <div class="tag-list">
-            <div class="tag"><span id="libraryTrackCount">0</span> titres</div>
-            <div class="tag"><span id="libraryArtistCount">0</span> artistes</div>
-            <div class="tag"><span id="libraryAlbumCount">0</span> albums</div>
-          </div>
-        </div>
-
-        <div id="libraryLoader" class="loader-panel" hidden>
-          <div class="loader-spinner" aria-hidden="true"></div>
-          <div id="libraryLoaderText" class="loader-text">Chargement de la bibliothèque...</div>
+          <div id="libraryPagination" class="library-pagination" hidden></div>
         </div>
         <div id="libraryList" class="content-grid"></div>
-        <div id="libraryEmptyState" class="empty" hidden>Aucun titre dans la bibliothèque.</div>
+        <div id="libraryEmptyState" class="empty" hidden>Aucun titre dans la bibliotheque.</div>
       </div>
     </main>
 
@@ -157,8 +144,8 @@
         </div>
 
         <div class="card now-playing">
-          <div class="section-title">Sélection</div>
-          <h3 id="nowPlayingTitle">Aucun media selectionné</h3>
+          <div class="section-title">Selection</div>
+          <h3 id="nowPlayingTitle">Aucun media selectionne</h3>
           <button class="icon-button details-icon-toggle" id="detailsToggleBtn" type="button" aria-expanded="false" aria-label="Afficher ou masquer les details">
             <span id="detailsChevron" class="material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
           </button>

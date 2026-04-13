@@ -1,6 +1,7 @@
 {
     "name": "Tracks",
     "description": "Default list view for tracks.",
+    "controller": "moomuse_Track_collect",
     "actions": [
         {
             "id": "action.guess_candidate",

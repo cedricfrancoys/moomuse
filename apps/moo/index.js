@@ -32,6 +32,7 @@ const state = {
   libraryCategory: 'all',
   libraryQuery: '',
   libraryPage: 1,
+  libraryStart: 0,
   libraryPageSize: 50,
   libraryTotalCount: 0
 };
@@ -105,16 +106,10 @@ const el = {
   // Library elements
   librarySearchInput: document.getElementById('librarySearchInput'),
   libraryRefreshBtn: document.getElementById('libraryRefreshBtn'),
-  libraryIndexStatus: document.getElementById('libraryIndexStatus'),
-  libraryPlaylistsList: document.getElementById('libraryPlaylistsList'),
   libraryList: document.getElementById('libraryList'),
-  libraryLoader: document.getElementById('libraryLoader'),
-  libraryLoaderText: document.getElementById('libraryLoaderText'),
+  libraryPagination: document.getElementById('libraryPagination'),
   libraryEmptyState: document.getElementById('libraryEmptyState'),
-  librarySubtitle: document.getElementById('librarySubtitle'),
-  libraryTrackCount: document.getElementById('libraryTrackCount'),
-  libraryArtistCount: document.getElementById('libraryArtistCount'),
-  libraryAlbumCount: document.getElementById('libraryAlbumCount')
+  librarySubtitle: document.getElementById('librarySubtitle')
 };
 
 let snackbarTimer = null;
@@ -263,8 +258,9 @@ function initializeBrowseMode() {
 
 function initializeLibraryMode() {
   // Will be called when switching to library mode
-  el.libraryLoader.hidden = false;
   el.libraryEmptyState.hidden = true;
+  el.libraryPagination.hidden = true;
+  el.libraryPagination.innerHTML = '';
   el.libraryList.innerHTML = '';
   el.librarySubtitle.textContent = 'Chargement...';
   
@@ -272,47 +268,73 @@ function initializeLibraryMode() {
   loadLibraryTracks();
 }
 
-async function loadLibraryTracks(page = 1) {
+function buildLibraryDomain(query) {
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery.length) {
+    return [];
+  }
+
+  const parts = normalizedQuery.split(/\s+/).slice(0, 4);
+  // #todo - allow field-specific search (e.g. "artist:beatles album:abbey")
+  const fields = ['name', 'title', 'artist', 'album'];
+  let clauses = [[]];
+
+  for (const part of parts) {
+    const nextClauses = [];
+
+    for (const clause of clauses) {
+      for (const field of fields) {
+        nextClauses.push([
+          ...clause,
+          [field, 'ilike', `%${part}%`]
+        ]);
+      }
+    }
+
+    clauses = nextClauses;
+  }
+
+  return clauses;
+}
+
+async function loadLibraryTracks(start = state.libraryStart) {
   try {
-    el.libraryLoader.hidden = false;
     el.libraryEmptyState.hidden = true;
+    el.libraryPagination.hidden = true;
+    el.libraryPagination.innerHTML = '';
     el.libraryList.innerHTML = '';
-    el.libraryIndexStatus.textContent = 'Chargement...';
+    el.librarySubtitle.textContent = 'Chargement...';
     
-    state.libraryPage = page;
-    
-    // Build query filters
-    const filters = [];
-    
-    // TODO: Add category filters if needed
-    // if (state.libraryCategory !== 'all') { ... }
+    state.libraryStart = Math.max(0, Number(start) || 0);
+    state.libraryPage = Math.floor(state.libraryStart / state.libraryPageSize) + 1;
     
     // Build the request
-    const offset = (page - 1) * state.libraryPageSize;
     const params = new URLSearchParams({
-      get: 'core_model_collect',
-      entity: 'moomuse\\Track',
+      get: 'moomuse_Track_collect',
       limit: state.libraryPageSize,
-      start: offset,
+      start: state.libraryStart,
       order: 'title',
       fields: '{id,artist,title,album}'
     });
     
-    // Add search filter if present
-    if (state.libraryQuery.trim()) {
-      params.append('search', state.libraryQuery.trim());
+    const domain = buildLibraryDomain(state.libraryQuery);
+    if (domain.length) {
+      params.append('domain', JSON.stringify(domain));
     }
     
     const response = await fetch(`/?${params.toString()}`);
     const result = await response.json();
     const collection = Array.isArray(result) ? result : [];
+    const totalCountHeader = response.headers.get('X-Total-Count');
+    const totalCount = totalCountHeader ? Number.parseInt(totalCountHeader, 10) : collection.length;
 
     state.libraryTracks = collection;
-    state.libraryTotalCount = collection.length;
+    state.libraryTotalCount = Number.isFinite(totalCount) ? totalCount : collection.length;
     
-    updateLibraryUI();
     renderLibraryList();
-    el.libraryLoader.hidden = true;
+    el.librarySubtitle.textContent = state.libraryTotalCount
+      ? `${state.libraryTotalCount} titre(s) indexes`
+      : 'Aucun titre indexe pour le moment';
     
     if (state.libraryTracks.length === 0) {
       el.libraryEmptyState.hidden = false;
@@ -323,7 +345,6 @@ async function loadLibraryTracks(page = 1) {
   } catch (error) {
     console.error('Erreur lors du chargement de la bibliothèque:', error);
     el.librarySubtitle.textContent = 'Erreur lors du chargement';
-    el.libraryLoader.hidden = true;
   }
 }
 
@@ -374,46 +395,51 @@ function renderLibraryList() {
 
 function renderLibraryPagination() {
   const totalPages = Math.ceil(state.libraryTotalCount / state.libraryPageSize);
-  
+  const currentPage = Math.floor(state.libraryStart / state.libraryPageSize) + 1;
+  const hasPrevious = state.libraryStart > 0;
+  const nextStart = state.libraryStart + state.libraryPageSize;
+  const hasNext = nextStart < state.libraryTotalCount;
+
   if (totalPages <= 1) {
+    el.libraryPagination.hidden = true;
+    el.libraryPagination.innerHTML = '';
     return;
   }
-  
-  let paginationHtml = '<div class="library-pagination">';
-  
-  // Previous button
-  if (state.libraryPage > 1) {
-    paginationHtml += `<button class="button pagination-btn" data-page="${state.libraryPage - 1}">← Précédente</button>`;
-  }
-  
-  // Page info
-  paginationHtml += `<span class="pagination-info">Page ${state.libraryPage} / ${totalPages}</span>`;
-  
-  // Next button
-  if (state.libraryPage < totalPages) {
-    paginationHtml += `<button class="button pagination-btn" data-page="${state.libraryPage + 1}">Suivante →</button>`;
-  }
-  
-  paginationHtml += '</div>';
-  
-  const paginationDiv = document.createElement('div');
-  paginationDiv.innerHTML = paginationHtml;
-  el.libraryList.appendChild(paginationDiv);
-  
-  // Attach pagination button listeners
-  paginationDiv.querySelectorAll('.pagination-btn').forEach(btn => {
+
+  const firstStart = 0;
+  const previousStart = Math.max(0, state.libraryStart - state.libraryPageSize);
+  const lastStart = Math.max(0, (totalPages - 1) * state.libraryPageSize);
+  const visibleFrom = state.libraryTotalCount ? state.libraryStart + 1 : 0;
+  const visibleTo = Math.min(state.libraryStart + state.libraryTracks.length, state.libraryTotalCount);
+
+  el.libraryPagination.innerHTML = `
+    <button class="button pagination-btn" type="button" data-start="${firstStart}" ${hasPrevious ? '' : 'disabled'}>« Début</button>
+    <button class="button pagination-btn" type="button" data-start="${previousStart}" ${hasPrevious ? '' : 'disabled'}>‹ Précédent</button>
+    <span class="pagination-info">Page ${currentPage} / ${totalPages} · ${visibleFrom}-${visibleTo} sur ${state.libraryTotalCount}</span>
+    <button class="button pagination-btn" type="button" data-start="${nextStart}" ${hasNext ? '' : 'disabled'}>Suivant ›</button>
+    <button class="button pagination-btn" type="button" data-start="${lastStart}" ${hasNext ? '' : 'disabled'}>Fin »</button>
+  `;
+  el.libraryPagination.innerHTML = [
+    `<button class="button pagination-btn icon-only" type="button" data-start="${firstStart}" aria-label="Premiere page" title="Premiere page" ${hasPrevious ? '' : 'disabled'}><span class="material-symbols-outlined" aria-hidden="true">first_page</span></button>`,
+    `<button class="button pagination-btn icon-only" type="button" data-start="${previousStart}" aria-label="Page precedente" title="Page precedente" ${hasPrevious ? '' : 'disabled'}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>`,
+    `<span class="pagination-info">Page ${currentPage} / ${totalPages} - ${visibleFrom}-${visibleTo} sur ${state.libraryTotalCount}</span>`,
+    `<button class="button pagination-btn icon-only" type="button" data-start="${nextStart}" aria-label="Page suivante" title="Page suivante" ${hasNext ? '' : 'disabled'}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>`,
+    `<button class="button pagination-btn icon-only" type="button" data-start="${lastStart}" aria-label="Derniere page" title="Derniere page" ${hasNext ? '' : 'disabled'}><span class="material-symbols-outlined" aria-hidden="true">last_page</span></button>`
+  ].join('');
+  el.libraryPagination.hidden = false;
+
+  el.libraryPagination.querySelectorAll('.pagination-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const page = parseInt(btn.dataset.page);
-      loadLibraryTracks(page);
-      el.libraryList.scrollIntoView({ behavior: 'smooth' });
+      const targetStart = Number.parseInt(btn.dataset.start || '0', 10);
+      loadLibraryTracks(targetStart);
+      el.libraryContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 }
 
 async function fetchLibraryTrackPlaybackFile(track) {
   const params = new URLSearchParams({
-    get: 'core_model_read',
-    entity: 'moomuse\\Track',
+    get: 'moomuse_Track_info',
     ids: track.id,
     fields: '{id,full_path,path,filename,extension,size}'
   });
@@ -462,22 +488,6 @@ async function playTrackFromLibrary(track, index) {
     console.error(error);
     setStatus('Impossible de lire cette piste depuis la bibliothèque.', true);
   }
-}
-
-function updateLibraryUI() {
-  // Update counts
-  el.libraryTrackCount.textContent = state.libraryTracks.length;
-  
-  // Count unique artists and albums
-  const artists = new Set();
-  const albums = new Set();
-  state.libraryTracks.forEach(track => {
-    if (track.artist) artists.add(track.artist);
-    if (track.album) albums.add(track.album);
-  });
-  
-  el.libraryArtistCount.textContent = artists.size;
-  el.libraryAlbumCount.textContent = albums.size;
 }
 
 function updateNowPlayingTitle(title) {
@@ -1566,12 +1576,12 @@ el.libraryModeBtn.addEventListener('click', () => {
   switchMode('library');
 });
 el.libraryRefreshBtn.addEventListener('click', () => {
-  loadLibraryTracks();
+  loadLibraryTracks(state.libraryStart);
 });
 el.librarySearchInput.addEventListener('input', () => {
   state.libraryQuery = el.librarySearchInput.value;
-  // Reset to page 1 when searching
-  loadLibraryTracks(1);
+  state.libraryStart = 0;
+  loadLibraryTracks(0);
 });
 
 // Playlist mode buttons
