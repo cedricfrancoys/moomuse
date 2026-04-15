@@ -32,7 +32,8 @@ $result = [
     'directories_scanned' => 0,
     'directories_failed'  => 0,
     'scanned_ids'         => [],
-    'failed_ids'          => []
+    'failed_ids'          => [],
+    'logs'                => []
 ];
 
 $directories = Directory::search([['status', '=', 'pending']])
@@ -54,6 +55,7 @@ foreach($directories as $id => $directory) {
     }
     catch(Exception $e) {
         ++$result['directories_failed'];
+        $result['logs'][] = "ERR - " . $e->getMessage();
         $result['failed_ids'][] = $id;
     }
 }

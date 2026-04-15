@@ -113,10 +113,20 @@ const el = {
 };
 
 let snackbarTimer = null;
+let librarySearchDebounceTimer = null;
 const themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const PLAYLIST_STORAGE_KEY = 'moo_saved_playlists';
+const CRON_INTERVAL_MS = 60000;
 let wakeLock = null;
 let wakeLockEnabled = 'wakeLock' in navigator;
+
+function startCronPolling() {
+  setInterval(() => {
+    fetch('/?do=moomuse_cron_run').catch((error) => {
+      console.error('Cron run failed.', error);
+    });
+  }, CRON_INTERVAL_MS);
+}
 
 async function requestWakeLock() {
   if (!wakeLockEnabled || wakeLock || el.audioPlayer.paused || el.audioPlayer.ended || document.hidden) {
@@ -243,7 +253,8 @@ function switchMode(mode) {
     if (!state.drives.length) {
       initializeBrowseMode();
     }
-  } else {
+  } 
+  else {
     // Initialize library mode if needed
     if (!state.libraryTracks.length) {
       initializeLibraryMode();
@@ -314,7 +325,7 @@ async function loadLibraryTracks(start = state.libraryStart) {
       limit: state.libraryPageSize,
       start: state.libraryStart,
       order: 'title',
-      fields: '{id,artist,title,album}'
+      fields: '{id,name,path,full_path,extension,size,artist,title,album,drive_id}'
     });
     
     const domain = buildLibraryDomain(state.libraryQuery);
@@ -324,7 +335,7 @@ async function loadLibraryTracks(start = state.libraryStart) {
     
     const response = await fetch(`/?${params.toString()}`);
     const result = await response.json();
-    const collection = Array.isArray(result) ? result : [];
+    const collection = Array.isArray(result) ? result.map((track) => normalizeTrack(track)) : [];
     const totalCountHeader = response.headers.get('X-Total-Count');
     const totalCount = totalCountHeader ? Number.parseInt(totalCountHeader, 10) : collection.length;
 
@@ -352,13 +363,14 @@ function renderLibraryList() {
   el.libraryList.innerHTML = '';
   
   state.libraryTracks.forEach((track, index) => {
+    const normalizedTrack = normalizeTrack(track);
     const trackItem = document.createElement('div');
     trackItem.className = 'library-track-item';
-    trackItem.dataset.trackId = track.id || '';
+    trackItem.dataset.trackId = normalizedTrack.id || '';
     
-    const artist = track.artist || 'Artiste inconnu';
-    const title = track.title || track.name || 'Titre inconnu';
-    const album = track.album || '';
+    const artist = normalizedTrack.artist || 'Artiste inconnu';
+    const title = normalizedTrack.title || normalizedTrack.name || 'Titre inconnu';
+    const album = normalizedTrack.album || '';
     
     trackItem.innerHTML = `
       <div class="track-item-content">
@@ -371,20 +383,27 @@ function renderLibraryList() {
         </div>
       </div>
       <div class="track-item-actions">
-        <button class="icon-button library-track-play" type="button" aria-label="Lire" title="Lire">
-          <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+        <button class="icon-button library-track-add" type="button" aria-label="Ajouter a la playlist" title="Ajouter a la playlist">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
         </button>
       </div>
     `;
     
-    // Play button
-    trackItem.querySelector('.library-track-play').addEventListener('click', () => {
-      playTrackFromLibrary(track, index);
+    trackItem.querySelector('.library-track-add').addEventListener('click', async (event) => {
+      event.stopPropagation();
+
+      try {
+        const file = await fetchLibraryTrackPlaybackFile(normalizedTrack);
+        addToPlaylist(file.path);
+      }
+      catch (error) {
+        console.error(error);
+        setStatus('Impossible d ajouter cette piste a la playlist.', true);
+      }
     });
     
-    // Click to select/play
     trackItem.addEventListener('click', () => {
-      playTrackFromLibrary(track, index);
+      playTrackFromLibrary(normalizedTrack, index);
     });
     
     el.libraryList.appendChild(trackItem);
@@ -441,7 +460,7 @@ async function fetchLibraryTrackPlaybackFile(track) {
   const params = new URLSearchParams({
     get: 'moomuse_Track_info',
     ids: track.id,
-    fields: '{id,full_path,path,filename,extension,size}'
+    fields: '{id,name,path,full_path,filename,extension,size,artist,title,album,drive_id,extref_accoust_id,extref_mb_track_id}'
   });
 
   const response = await fetch(`/?${params.toString()}`);
@@ -457,20 +476,13 @@ async function fetchLibraryTrackPlaybackFile(track) {
     throw new Error('missing_full_path');
   }
 
-  const normalizedPath = String(playbackPath);
-  const filename = record?.filename || normalizedPath.split(/[\\/]/).pop() || track.name || track.title || 'media';
-  const extension = record?.extension || (filename.includes('.') ? filename.split('.').pop().toLowerCase() : '');
+  const file = normalizeTrack({
+    ...track,
+    ...record,
+    path: String(playbackPath)
+  });
 
-  const file = {
-    name: track.title || track.name || filename,
-    path: normalizedPath,
-    type: 'file',
-    extension,
-    size: record?.size ?? null,
-    modified: null
-  };
-
-  state.fileRegistry[normalizedPath] = file;
+  state.fileRegistry[file.path] = file;
   return file;
 }
 
@@ -542,11 +554,11 @@ function normalizePlaylistDescription(description) {
 
 function normalizePlaylistRecord(item, fallback = {}) {
   const tracks = Array.isArray(item?.tracks)
-    ? item.tracks.filter((track) => typeof track === 'string')
+    ? item.tracks.map((track) => normalizePlaylistTrackItem(track)).filter(Boolean)
     : Array.isArray(item)
-      ? item.filter((track) => typeof track === 'string')
+      ? item.map((track) => normalizePlaylistTrackItem(track)).filter(Boolean)
       : Array.isArray(fallback.tracks)
-        ? fallback.tracks.filter((track) => typeof track === 'string')
+        ? fallback.tracks.map((track) => normalizePlaylistTrackItem(track)).filter(Boolean)
         : [];
 
   return {
@@ -564,7 +576,7 @@ function getSavedPlaylistItems() {
     name: normalizePlaylistName(state.currentPlaylistMeta.name),
     author: normalizePlaylistAuthor(state.currentPlaylistMeta.author),
     description: normalizePlaylistDescription(state.currentPlaylistMeta.description),
-    tracks: [...state.playlist],
+    tracks: serializeCurrentPlaylistTracks(),
     system: true
   };
 
@@ -612,7 +624,10 @@ function syncFilteredSavedPlaylists() {
   }
 
   state.filteredSavedPlaylists = items.filter((playlist) => {
-    return [playlist.name, ...playlist.tracks]
+    return [
+      playlist.name,
+      ...playlist.tracks.flatMap((track) => [track.full_path, track.path])
+    ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query));
   });
@@ -661,7 +676,24 @@ function renderSavedPlaylists() {
         return;
       }
 
-      state.playlist = [...playlist.tracks];
+      state.playlist = playlist.tracks
+        .map((track) => {
+          const fullPath = getPlaylistTrackFullPath(track);
+          if (!fullPath) {
+            return null;
+          }
+
+          state.fileRegistry[fullPath] = normalizeTrack({
+            path: fullPath,
+            full_path: fullPath,
+            track_id: track.track_id ?? null,
+            drive_id: track.drive_id ?? null,
+            musicbrainz_track_id: track.musicbrainz_track_id ?? null
+          });
+
+          return fullPath;
+        })
+        .filter(Boolean);
       state.currentPlaylistMeta = {
         name: playlist.name,
         author: playlist.author || '',
@@ -740,7 +772,9 @@ function savePlaylistEdit() {
 }
 
 function saveNamedPlaylist(name, tracks, options = {}) {
-  const normalizedTracks = Array.isArray(tracks) ? tracks.filter((track) => typeof track === 'string') : [];
+  const normalizedTracks = Array.isArray(tracks)
+    ? tracks.map((track) => normalizePlaylistTrackItem(track)).filter(Boolean)
+    : [];
   if (!normalizedTracks.length) {
     return;
   }
@@ -823,35 +857,144 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function normalizeTrack(track = {}, fallbackPath = '') {
+  const sourcePath = typeof track.path === 'string' ? track.path : '';
+  const fullPath = String(track.full_path || track.fullpath || sourcePath || fallbackPath || '');
+  const resolvedPath = fullPath;
+  const normalizedPath = resolvedPath.replace(/\\/g, '/');
+  const segments = normalizedPath.split('/').filter(Boolean);
+  const fallbackName = segments.length ? segments[segments.length - 1] : resolvedPath;
+  const name = track.name || track.filename || fallbackName || track.title || 'media';
+  const extension = (track.extension || (name.includes('.') ? name.split('.').pop().toLowerCase() : '')).toLowerCase();
+  const driveId = typeof track.drive_id === 'object' && track.drive_id !== null
+    ? track.drive_id.id ?? null
+    : track.drive_id ?? null;
+  const trackId = track.track_id ?? track.id ?? null;
+  const relativePath = (track.full_path || track.fullpath) && sourcePath && sourcePath !== resolvedPath
+    ? sourcePath
+    : null;
+
+  return {
+    id: track.id ?? trackId,
+    track_id: trackId,
+    name,
+    path: resolvedPath,
+    full_path: resolvedPath,
+    relative_path: relativePath,
+    extension,
+    size: track.size ?? null,
+    artist: track.artist || '',
+    title: track.title || '',
+    album: track.album || '',
+    drive_id: driveId,
+    musicbrainz_track_id: track.musicbrainz_track_id || track.extref_mb_track_id || '',
+    type: 'file',
+    modified: track.modified ?? null
+  };
+}
+
+function normalizePlaylistTrackItem(track) {
+  if (typeof track === 'string') {
+    const fullPath = track.trim();
+    return fullPath ? { full_path: fullPath } : null;
+  }
+
+  if (!track || typeof track !== 'object') {
+    return null;
+  }
+
+  const fullPath = String(track.full_path || track.fullpath || track.path || '').trim();
+  if (!fullPath) {
+    return null;
+  }
+
+  const normalized = { full_path: fullPath };
+  const trackId = track.track_id ?? track.id ?? null;
+  const driveId = typeof track.drive_id === 'object' && track.drive_id !== null
+    ? track.drive_id.id ?? null
+    : track.drive_id ?? null;
+  const musicbrainzTrackId = track.musicbrainz_track_id || track.extref_mb_track_id || null;
+
+  if (trackId != null && trackId !== '') {
+    normalized.track_id = trackId;
+  }
+
+  if (driveId != null && driveId !== '') {
+    normalized.drive_id = driveId;
+  }
+
+  if (musicbrainzTrackId) {
+    normalized.musicbrainz_track_id = musicbrainzTrackId;
+  }
+
+  return normalized;
+}
+
+function serializeTrackForPlaylist(track) {
+  const normalizedTrack = normalizeTrack(track);
+  const serialized = {
+    full_path: normalizedTrack.full_path || normalizedTrack.path
+  };
+
+  if (normalizedTrack.track_id != null) {
+    serialized.track_id = normalizedTrack.track_id;
+  }
+
+  if (normalizedTrack.drive_id != null) {
+    serialized.drive_id = normalizedTrack.drive_id;
+  }
+
+  if (normalizedTrack.musicbrainz_track_id) {
+    serialized.musicbrainz_track_id = normalizedTrack.musicbrainz_track_id;
+  }
+
+  return serialized;
+}
+
+function getPlaylistTrackFullPath(track) {
+  return normalizePlaylistTrackItem(track)?.full_path || null;
+}
+
+function serializeCurrentPlaylistTracks() {
+  return state.playlist
+    .map((path) => serializeTrackForPlaylist(getFileFromRegistry(path) || { path }))
+    .filter((track) => track && track.full_path);
+}
+
+function getTrackPlaybackPath(track) {
+  if (!track) {
+    return '';
+  }
+
+  const fullPath = typeof track.full_path === 'string'
+    ? track.full_path.trim()
+    : (typeof track.fullpath === 'string' ? track.fullpath.trim() : '');
+  if (fullPath) {
+    return fullPath;
+  }
+
+  const path = typeof track.path === 'string' ? track.path.trim() : '';
+  return path;
+}
+
 function rememberFiles(files) {
   files.forEach((file) => {
-    state.fileRegistry[file.path] = file;
+    const normalizedTrack = normalizeTrack(file);
+    state.fileRegistry[normalizedTrack.path] = normalizedTrack;
   });
 }
 
 function getFileFromRegistry(path) {
   const knownFile = state.fileRegistry[path] || state.files.find((item) => item.path === path);
   if (knownFile) {
-    return knownFile;
+    return normalizeTrack(knownFile);
   }
 
   if (!path) {
     return null;
   }
 
-  const normalizedPath = String(path).replace(/\\/g, '/');
-  const segments = normalizedPath.split('/').filter(Boolean);
-  const name = segments.length ? segments[segments.length - 1] : path;
-  const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-
-  return {
-    name,
-    path,
-    type: 'file',
-    extension,
-    size: null,
-    modified: null
-  };
+  return normalizeTrack({ path });
 }
 
 function updateEmptyState() {
@@ -1019,8 +1162,9 @@ async function openPath(path, pushHistory = true) {
         if (!state.currentPath) {
           state.currentPath = basePath;
         }
-        rememberFiles(batch);
-        state.files.push(...batch);
+        const tracks = batch.map((file) => normalizeTrack(file));
+        rememberFiles(tracks);
+        state.files.push(...tracks);
         revealContent();
         refreshContentView();
       })
@@ -1089,7 +1233,7 @@ function renderFilesList() {
             </div>
           </div>
           <div class="item-actions">
-            <button class="icon-button add-playlist-btn" type="button" data-path="${escapeHtml(file.path)}" title="Ajouter a la playlist">+</button>
+            <button class="icon-button add-playlist-btn" type="button" data-path="${escapeHtml(file.path)}" title="Ajouter a la playlist" aria-label="Ajouter a la playlist"><span class="material-symbols-outlined" aria-hidden="true">add</span></button>
           </div>
         </div>
       </div>`;
@@ -1219,7 +1363,12 @@ function buildMediaUrl(file) {
     return '';
   }
 
-  return `/?get=moomuse_stream&path=${encodeURIComponent(file.path)}`;
+  const playbackPath = getTrackPlaybackPath(file);
+  if (!playbackPath) {
+    return '';
+  }
+
+  return `/?get=moomuse_stream&path=${encodeURIComponent(playbackPath)}`;
 }
 
 function addToPlaylist(path, options = {}) {
@@ -1328,7 +1477,7 @@ function exportPlaylist() {
     name: state.currentPlaylistMeta.name || 'Playlist exportee',
     author: state.currentPlaylistMeta.author || '',
     description: state.currentPlaylistMeta.description || '',
-    tracks: state.playlist
+    tracks: serializeCurrentPlaylistTracks()
   }, null, 2);
   const blob = new Blob([payload], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1360,7 +1509,7 @@ async function copyPlaylistJson() {
     name: state.currentPlaylistMeta.name || 'Playlist courante',
     author: state.currentPlaylistMeta.author || '',
     description: state.currentPlaylistMeta.description || '',
-    tracks: state.playlist
+    tracks: serializeCurrentPlaylistTracks()
   }, null, 2);
 
   try {
@@ -1398,11 +1547,23 @@ function syncCurrentTrackWithPlaylist() {
 function importPlaylistFromText(content) {
   const parsed = JSON.parse(content);
   const playlist = normalizePlaylistRecord(parsed, { name: 'Playlist importee' });
-  if (!Array.isArray(playlist.tracks) || playlist.tracks.some((item) => typeof item !== 'string')) {
+  if (!Array.isArray(playlist.tracks) || playlist.tracks.some((item) => !item || typeof item !== 'object' || !(item.full_path || item.fullpath))) {
     throw new Error('invalid_playlist_format');
   }
 
-  state.playlist = [...playlist.tracks];
+  state.playlist = playlist.tracks
+    .map((track) => {
+      const fullPath = track.full_path || track.fullpath;
+      state.fileRegistry[fullPath] = normalizeTrack({
+        path: fullPath,
+        full_path: fullPath,
+        track_id: track.track_id ?? null,
+        drive_id: track.drive_id ?? null,
+        musicbrainz_track_id: track.musicbrainz_track_id ?? null
+      });
+      return fullPath;
+    })
+    .filter(Boolean);
   state.currentPlaylistMeta = {
     name: playlist.name,
     author: playlist.author || '',
@@ -1459,9 +1620,9 @@ function playFile(path) {
 }
 
 function renderPlayer(autoPlay = false) {
-  const file = state.currentTrack;
+  const track = state.currentTrack;
 
-  if (!file) {
+  if (!track) {
     updateNowPlayingTitle('Aucun media selectionne');
     el.detailsPanel.innerHTML = 'Les informations du fichier selectionne apparaitront ici.';
     el.audioPlayer.removeAttribute('src');
@@ -1469,29 +1630,37 @@ function renderPlayer(autoPlay = false) {
     return;
   }
 
-  updateNowPlayingTitle(file.name);
+  updateNowPlayingTitle(track.title || track.name);
+  const selectionLines = [
+    track.title,
+    track.artist,
+    track.album
+  ].filter((value) => value && String(value).trim().length > 0);
+
   el.detailsPanel.innerHTML = `
-    <div><strong>Nom</strong><br>${escapeHtml(file.name)}</div>
+    <small>${selectionLines.map((value) => `${escapeHtml(value)}`).join(' - ')}</small>
+    ${selectionLines.length ? '<div class="details-spacer"></div>' : ''}
+    <div><strong>Nom</strong><br>${escapeHtml(track.name)}</div>
     <div class="details-spacer"></div>
-    <div><strong>Chemin</strong><br><span class="muted" style="display: inline-block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</span></div>
+    <div><strong>Chemin</strong><br><span class="muted" style="display: inline-block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(track.path)}">${escapeHtml(track.path)}</span></div>
     <div class="details-spacer"></div>
-    <div><strong>Extension</strong><br>${escapeHtml(file.extension || '-')}</div>
+    <div><strong>Extension</strong><br>${escapeHtml(track.extension || '-')}</div>
     <div class="details-spacer"></div>
-    <div><strong>Taille</strong><br>${escapeHtml(formatBytes(file.size))}</div>
-    <div class="details-spacer"></div>
-    <div><strong>Derniere modification</strong><br>${escapeHtml(formatDate(file.modified))}</div>
+    <div><strong>Taille</strong><br>${escapeHtml(formatBytes(track.size))}</div>
   `;
 
   syncDetailsVisibility();
 
-  const mediaUrl = buildMediaUrl(file);
+  const mediaUrl = buildMediaUrl(track);
   if (!mediaUrl) {
     return;
   }
 
-  if (el.audioPlayer.dataset.path !== file.path) {
+  const playbackPath = getTrackPlaybackPath(track);
+
+  if (el.audioPlayer.dataset.path !== playbackPath) {
     el.audioPlayer.src = mediaUrl;
-    el.audioPlayer.dataset.path = file.path;
+    el.audioPlayer.dataset.path = playbackPath;
   }
 
   if (autoPlay) {
@@ -1581,7 +1750,15 @@ el.libraryRefreshBtn.addEventListener('click', () => {
 el.librarySearchInput.addEventListener('input', () => {
   state.libraryQuery = el.librarySearchInput.value;
   state.libraryStart = 0;
-  loadLibraryTracks(0);
+
+  if (librarySearchDebounceTimer) {
+    clearTimeout(librarySearchDebounceTimer);
+  }
+
+  librarySearchDebounceTimer = setTimeout(() => {
+    loadLibraryTracks(0);
+    librarySearchDebounceTimer = null;
+  }, 300);
 });
 
 // Playlist mode buttons
@@ -1703,6 +1880,7 @@ syncPlaylistModeButtons();
 renderSavedPlaylists();
 renderPlaylist();
 loadDrives();
+window.addEventListener('load', startCronPolling, { once: true });
 
 
 

@@ -103,7 +103,8 @@ class Track extends Model {
                     'candidate',
                     'unknown',
                     'ambiguous',
-                    'identified'
+                    'identified',
+                    'error'
                 ],
                 'default'           => 'pending',
                 'description'       => 'Analysis status of the track.',
@@ -139,7 +140,28 @@ class Track extends Model {
                 'type'              => 'datetime',
                 'description'       => 'Date and time of the last completed track analysis.',
                 'help'              => 'Stores when the track metadata was last analyzed.'
-            ]
+            ],
+
+            'chromaprint' => [
+                'type'              => 'string',
+                'usage'             => 'text/plain:7000',
+                'description'       => 'Chromaprint fingerprint of the track.',
+            ],
+
+            'extref_accoust_id' => [
+                'type'              => 'string',
+                'usage'             => 'text/plain:36',
+                'description'       => 'AccoustID identifier UUIDv4 of the track.',
+                'example'           => 'f3b2c9a4-6d2e-4f91-bb4a-7c9e8c1d2e3f'
+            ],
+
+            'extref_mb_track_id' => [
+                'type'              => 'string',
+                'usage'             => 'text/plain:36',
+                'description'       => 'Musicbrainz identifier UUIDv4 of the track.',
+                'example'           => 'f3b2c9a4-6d2e-4f91-bb4a-7c9e8c1d2e3f'
+            ],
+            
 
         ];
     }
@@ -152,6 +174,12 @@ class Track extends Model {
             $result[$id] = $mountPoint ? rtrim($mountPoint, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($track['path'], DIRECTORY_SEPARATOR) : null;
         }
         return $result;
+    }
+
+    public function getUnique(): array { 
+        return [
+            ['device_id', 'drive_id', 'path']
+        ];
     }
 
     public function getIndexes(): array {

@@ -51,27 +51,35 @@ if(!$file || !is_file($file)) {
     throw new Exception("file_not_found", EQ_ERROR_INVALID_PARAM);
 }
 
-$result = eQual::run('get', 'moomuse_fileinfo', [
-    'path' => $file
-]);
+try {
+    $result = eQual::run('get', 'moomuse_fileinfo', [
+            'path' => $file
+        ]);
 
-$bestMatch = $result['analysis']['best_match'] ?? null;
+    $bestMatch = $result['analysis']['best_match'] ?? null;
 
-$values = [
-    'last_analyzed_at' => time()
-];
+    $values = [
+        'last_analyzed_at' => time()
+    ];
 
-if($bestMatch) {
-    $values['title'] = $bestMatch['title'] ?? null;
-    $values['artist'] = $bestMatch['artist'] ?? null;
-    $values['album'] = $bestMatch['album'] ?? null;
-    $values['status'] = 'candidate';
+    if($bestMatch) {
+        $values['title'] = $bestMatch['title'] ?? null;
+        $values['artist'] = $bestMatch['artist'] ?? null;
+        $values['album'] = $bestMatch['album'] ?? null;
+        $values['status'] = 'candidate';
+    }
+    else {
+        $values['status'] = 'unknown';
+    }
+
+    Track::id($track['id'])->update($values);
 }
-else {
-    $values['status'] = 'unknown';
+catch(Exception $e) {
+    Track::id($track['id'])->update([
+        'status' => 'error'
+    ]); 
+    throw $e;
 }
-
-Track::id($track['id'])->update($values);
 
 $context->httpResponse()
     ->status(204)

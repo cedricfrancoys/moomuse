@@ -13,7 +13,7 @@ use moomuse\Track;
     'params'        => [
         'limit' => [
             'type'              => 'integer',
-            'default'           => 100
+            'default'           => 50
         ]
     ],
     'access' => [
@@ -32,10 +32,14 @@ $result = [
     'tracks_processed' => 0,
     'tracks_failed'    => 0,
     'failed_ids'       => [],
-    'processed_ids'    => []
+    'processed_ids'    => [],
+    'logs'             => []
 ];
 
-$tracks = Track::search([['status', '=', 'pending']])
+$tracks = Track::search(
+        [['status', '=', 'pending']],
+        ['limit' => $params['limit']]
+    )
     ->read(['id']);
 
 $count = 0;
@@ -54,6 +58,7 @@ foreach($tracks as $id => $track) {
     }
     catch(Exception $e) {
         ++$result['tracks_failed'];
+        $result['logs'][] = "ERR - " . $e->getMessage();
         $result['failed_ids'][] = $id;
     }
 }
