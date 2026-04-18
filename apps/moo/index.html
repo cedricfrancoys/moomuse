@@ -11,22 +11,31 @@
   <div class="app">
     <aside class="sidebar">
       <div class="mode-switcher" role="radiogroup" aria-label="Mode de fonctionnement">
-        <button class="button mode-switch-btn" id="browseModeBtn" type="button" aria-pressed="true" title="Explorer les disques">
-          <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
-          <span>Explorer</span>
-        </button>
-        <button class="button mode-switch-btn" id="libraryModeBtn" type="button" aria-pressed="false" title="Consulter la bibliotheque">
+        <button class="button mode-switch-btn" id="libraryModeBtn" type="button" aria-pressed="true" title="Consulter la bibliotheque">
           <span class="material-symbols-outlined" aria-hidden="true">library_music</span>
-          <span>Bibliotheque</span>
+          <span>Bibliothèque</span>
         </button>
+        <button class="button mode-switch-btn" id="browseModeBtn" type="button" aria-pressed="false" title="Explorer les disques">
+          <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
+          <span>Explorateur</span>
+        </button>
+        <button class="button mode-switch-btn" id="visualizeModeBtn" type="button" aria-pressed="false" title="Visualiser les fichiers">
+          <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+          <span>Visualisation</span>
+        </button>
+        <button class="button mode-switch-btn" id="playlistsModeBtn" type="button" aria-pressed="false" title="Consulter les playlists">
+          <span class="material-symbols-outlined" aria-hidden="true">playlist_play</span>
+          <span>Playlists</span>
+        </button>
+
       </div>
 
       <div class="brand">
         <h1>MooMuse</h1>
-        <p id="modeDescription">Explore les supports pour lancer les medias immediatement</p>
+        <p id="modeDescription">Recherche dans la bibliotheque ou passe en mode explorer pour analyser des dossiers</p>
       </div>
 
-      <div id="browseSidebar">
+      <div id="browseSidebar" hidden>
         <div class="section-title">Supports</div>
       <div id="drivesList" class="tree"></div>
 
@@ -38,7 +47,7 @@
       </div>
       </div>
 
-      <div id="librarySidebar" hidden>
+      <div id="librarySidebar">
         <div class="section-title">Categories</div>
         <div class="library-categories">
           <button class="button ghost library-category-btn" type="button" data-category="all" aria-pressed="true">
@@ -60,6 +69,23 @@
         <div class="sidebar-current-directories">
           <div class="section-title">Playlists</div>
           <div id="libraryPlaylistsList" class="tree"></div>
+        </div>
+      </div>
+
+      <div id="visualizeSidebar" hidden>
+        <div class="section-title">Visualisation</div>
+        <div class="tree">
+          <div class="tree-item selected">
+            <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            Vue generale
+          </div>
+        </div>
+
+        <div class="sidebar-spacer" aria-hidden="true"></div>
+
+        <div class="sidebar-current-directories">
+          <div class="section-title">A propos</div>
+          <div class="muted">Cette zone est prete pour accueillir des vues dediees a la visualisation.</div>
         </div>
       </div>
     </aside>
@@ -86,18 +112,26 @@
         <div class="pathbar" id="breadcrumbBar"></div>
       </div>
 
-      <div id="libraryToolbar" hidden>
-        <div class="toolbar-row">
-          <input class="input library-search-input" id="librarySearchInput" type="text" placeholder="Rechercher par artiste, titre, album..." />
-          <button class="icon-button" id="libraryRefreshBtn" type="button" aria-label="Rechercher" title="Rechercher">
+      <div id="libraryToolbar" hidden style="width: 100%;">
+        <div class="toolbar-row" style="display: flex; width: 100%;">
+          <input style="display: block;" class="input library-search-input" id="librarySearchInput" type="text" placeholder="Rechercher par artiste, titre, album..." />
+          <div id="libraryPagination" style="margin-left: auto;" class="library-pagination"></div>
+          <button style="display: none" role="icon-button" id="libraryRefreshBtn" type="button" aria-label="Rechercher" title="Rechercher">
             <span class="material-symbols-outlined" aria-hidden="true">search</span>
           </button>
+        </div>
+      </div>
+      <div id="visualizeToolbar" hidden style="width: 100%;">
+        <div class="toolbar-row">
+          <div>
+            <div id="visualizeTrackInfo" class="visualize-track-info muted">Des infos seront visibles en cours de lecture.</div>
+          </div>
         </div>
       </div>
     </header>
 
     <main class="content">
-      <div id="browseContent">
+      <div id="browseContent" hidden>
         <div class="content-header">
           <div>
             <h2 id="currentTitle">Exploration</h2>
@@ -118,16 +152,120 @@
         <div id="emptyState" class="empty" hidden>Aucun media ou dossier trouve pour ce niveau.</div>
       </div>
 
-      <div id="libraryContent" hidden>
+      <div id="libraryContent">
         <div class="content-header">
           <div>
-            <h2>Bibliotheque</h2>
-            <p class="muted" id="librarySubtitle">Chargement...</p>
+            <p class="muted" id="librarySubtitle">Recherche un titre, un artiste ou un album</p>
           </div>
-          <div id="libraryPagination" class="library-pagination" hidden></div>
         </div>
         <div id="libraryList" class="content-grid"></div>
-        <div id="libraryEmptyState" class="empty" hidden>Aucun titre dans la bibliotheque.</div>
+        <div id="libraryEmptyState" class="empty">Lance une recherche dans la bibliothèque ou, s'il n'y a pas encore d'index, passe en mode explorer et sélectionne les dossiers à analyser.</div>
+      </div>
+
+      <div id="visualizeContent" hidden>
+        <div class="content-header">
+          <div>
+            <h2>Visualisation</h2>
+            <p class="muted">Visualisations et analyse de Track.</p>
+          </div>
+        </div>
+
+        <div class="card visualization-analysis-card">
+          <div class="card-header">
+            <div class="section-title">Analyse emotionnelle</div>
+            <div id="visualizeConfidence" class="muted">Confiance 0%</div>
+          </div>
+          <div id="visualizeElapsed" class="muted visualization-meta">0 ms analyses</div>
+          <div class="visualization-grid" id="visualizationGrid">
+            <div class="emotion-card">
+              <div class="emotion-card-header">
+                <strong>Energy</strong>
+                <span id="visualizeInstantEnergy" class="muted">0.00</span>
+              </div>
+              <div class="emotion-bars">
+                <div class="emotion-bar-row emotion-bar-row-long">
+                  <div class="emotion-bar-track"><div id="visualizeBarLongEnergy" class="emotion-bar-fill is-long"></div></div>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Instant</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarInstantEnergy" class="emotion-bar-fill"></div></div>
+                  <span class="emotion-row-value" data-dimension="energy" data-scope="instant">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Short</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarShortEnergy" class="emotion-bar-fill is-short"></div></div>
+                  <span class="emotion-row-value" data-dimension="energy" data-scope="short">0.00</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="emotion-card">
+              <div class="emotion-card-header">
+                <strong>Tension</strong>
+                <span id="visualizeInstantTension" class="muted">0.00</span>
+              </div>
+              <div class="emotion-bars">
+                <div class="emotion-bar-row emotion-bar-row-long">
+                  <div class="emotion-bar-track"><div id="visualizeBarLongTension" class="emotion-bar-fill is-long"></div></div>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Instant</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarInstantTension" class="emotion-bar-fill"></div></div>
+                  <span class="emotion-row-value" data-dimension="tension" data-scope="instant">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Short</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarShortTension" class="emotion-bar-fill is-short"></div></div>
+                  <span class="emotion-row-value" data-dimension="tension" data-scope="short">0.00</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="emotion-card">
+              <div class="emotion-card-header">
+                <strong>Temperament</strong>
+                <span id="visualizeInstantTemperament" class="muted">0.00</span>
+              </div>
+              <div class="emotion-bars">
+                <div class="emotion-bar-row emotion-bar-row-long">
+                  <div class="emotion-bipolar-track"><div id="visualizeBarLongTemperament" class="emotion-bipolar-fill is-long"></div></div>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Instant</span>
+                  <div class="emotion-bipolar-track"><div id="visualizeBarInstantTemperament" class="emotion-bipolar-fill"></div></div>
+                  <span class="emotion-row-value" data-dimension="temperament" data-scope="instant">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Short</span>
+                  <div class="emotion-bipolar-track"><div id="visualizeBarShortTemperament" class="emotion-bipolar-fill is-short"></div></div>
+                  <span class="emotion-row-value" data-dimension="temperament" data-scope="short">0.00</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="emotion-card">
+              <div class="emotion-card-header">
+                <strong>Stability</strong>
+                <span id="visualizeInstantStability" class="muted">0.00</span>
+              </div>
+              <div class="emotion-bars">
+                <div class="emotion-bar-row emotion-bar-row-long">
+                  <div class="emotion-bar-track"><div id="visualizeBarLongStability" class="emotion-bar-fill is-long"></div></div>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Instant</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarInstantStability" class="emotion-bar-fill"></div></div>
+                  <span class="emotion-row-value" data-dimension="stability" data-scope="instant">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Short</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarShortStability" class="emotion-bar-fill is-short"></div></div>
+                  <span class="emotion-row-value" data-dimension="stability" data-scope="short">0.00</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -165,26 +303,32 @@
 
         <div class="card current-playlist-card">
           <div class="playlist-header">
-            <div class="playlist-header-main">
-              <div class="section-title">Playlist</div>
-              <div class="playlist-toggle-group">
-                <button class="button ghost playlist-toggle-btn" id="playlistRandomBtn" type="button" aria-pressed="false" title="Random">
-                  <span class="material-symbols-outlined" aria-hidden="true">shuffle</span>
-                </button>
-                <button class="button ghost playlist-toggle-btn" id="playlistRepeatBtn" type="button" aria-pressed="false" title="Repeat">
-                  <span class="material-symbols-outlined" id="playlistRepeatIcon" aria-hidden="true">repeat</span>
-                </button>
+            <div class="playlist-header-top">
+              <h3 class="playlist-title" id="currentPlaylistName">Playlist sans nom</h3>
+              <div class="playlist-menu-wrap">
+                <button class="button ghost playlist-menu-trigger" id="playlistMenuBtn" type="button" aria-expanded="false" aria-label="Actions de playlist" title="Actions de playlist"><span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button>
+                <div class="playlist-menu" id="playlistMenu" hidden>
+                  <button class="playlist-menu-item" id="editPlaylistBtn" type="button">Edit</button>
+                  <button class="playlist-menu-item" id="copyPlaylistJsonBtn" type="button">Copy JSON</button>
+                  <button class="playlist-menu-item" id="exportPlaylistBtn" type="button">Export</button>
+                  <button class="playlist-menu-item" id="importPlaylistBtn" type="button">Import</button>
+                </div>
+                <input id="importPlaylistInput" type="file" accept="application/json,.json" hidden />
               </div>
             </div>
-            <div class="playlist-menu-wrap">
-              <button class="button ghost playlist-menu-trigger" id="playlistMenuBtn" type="button" aria-expanded="false" aria-label="Actions de playlist" title="Actions de playlist"><span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button>
-              <div class="playlist-menu" id="playlistMenu" hidden>
-                <button class="playlist-menu-item" id="editPlaylistBtn" type="button">Edit</button>
-                <button class="playlist-menu-item" id="copyPlaylistJsonBtn" type="button">Copy JSON</button>
-                <button class="playlist-menu-item" id="exportPlaylistBtn" type="button">Export</button>
-                <button class="playlist-menu-item" id="importPlaylistBtn" type="button">Import</button>
-              </div>
-              <input id="importPlaylistInput" type="file" accept="application/json,.json" hidden />
+            <div class="playlist-toggle-group" style="display: flex;">
+              <button class="button ghost playlist-toggle-btn" id="playlistPlayBtn" type="button" title="Play">
+                <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+              </button>
+              <button class="button ghost playlist-toggle-btn" id="playlistSkipBtn" type="button" title="Skip">
+                <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
+              </button>
+              <button style="margin-left: auto;" class="button ghost playlist-toggle-btn" id="playlistRandomBtn" type="button" aria-pressed="false" title="Random">
+                <span class="material-symbols-outlined" aria-hidden="true">shuffle</span>
+              </button>
+              <button class="button ghost playlist-toggle-btn" id="playlistRepeatBtn" type="button" aria-pressed="false" title="Repeat">
+                <span class="material-symbols-outlined" id="playlistRepeatIcon" aria-hidden="true">repeat</span>
+              </button>
             </div>
           </div>
           <div id="playlistPanel" class="playlist-list muted">Aucun fichier dans la playlist.</div>
@@ -197,6 +341,14 @@
       <span id="statusText" hidden>Pret.</span>
       <div class="statusbar-player">
         <audio id="audioPlayer" controls preload="none"></audio>
+      </div>
+      <div class="statusbar-actions">
+        <button class="icon-button statusbar-action-btn" id="playerLikeBtn" type="button" aria-pressed="false" aria-label="Aimer la piste en cours" title="Aimer la piste en cours">
+          <span class="material-symbols-outlined" aria-hidden="true">favorite</span>
+        </button>
+        <button class="icon-button statusbar-action-btn" id="playerAddPlaylistBtn" type="button" aria-label="Ajouter la piste en cours a la playlist" title="Ajouter la piste en cours a la playlist">
+          <span class="material-symbols-outlined" aria-hidden="true">playlist_add</span>
+        </button>
       </div>
     </footer>
   </div>

@@ -151,14 +151,14 @@ class Track extends Model {
             'extref_accoust_id' => [
                 'type'              => 'string',
                 'usage'             => 'text/plain:36',
-                'description'       => 'AccoustID identifier UUIDv4 of the track.',
+                'description'       => 'AccoustID identifier UUIDv4 of the recording.',
                 'example'           => 'f3b2c9a4-6d2e-4f91-bb4a-7c9e8c1d2e3f'
             ],
 
-            'extref_mb_track_id' => [
+            'extref_musicbrainz_id' => [
                 'type'              => 'string',
                 'usage'             => 'text/plain:36',
-                'description'       => 'Musicbrainz identifier UUIDv4 of the track.',
+                'description'       => 'Musicbrainz identifier UUIDv4 of the recording.',
                 'example'           => 'f3b2c9a4-6d2e-4f91-bb4a-7c9e8c1d2e3f'
             ],
             

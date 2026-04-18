@@ -9,7 +9,7 @@ const state = {
   filteredSavedPlaylists: [],
   playlist: [],
   currentPlaylistMeta: {
-    name: 'Playlist courante',
+    name: '',
     author: '',
     description: ''
   },
@@ -27,17 +27,19 @@ const state = {
   showFiles: true,
   drives: [],
   loading: false,
-  mode: 'browse', // 'browse' or 'library'
+  mode: 'library', // 'browse', 'library' or 'visualize'
   libraryTracks: [],
   libraryCategory: 'all',
   libraryQuery: '',
   libraryPage: 1,
   libraryStart: 0,
   libraryPageSize: 50,
-  libraryTotalCount: 0
+  libraryTotalCount: 0,
+  libraryRequestId: 0
 };
 
 const PAGE_SIZE = 100;
+const LIBRARY_SEARCH_LIMIT = 50;
 
 const el = {
   drivesList: document.getElementById('drivesList'),
@@ -63,6 +65,9 @@ const el = {
   playlistsSearchInput: document.getElementById('playlistsSearchInput'),
   playlistsPanel: document.getElementById('playlistsPanel'),
   playlistPanel: document.getElementById('playlistPanel'),
+  currentPlaylistName: document.getElementById('currentPlaylistName'),
+  playlistPlayBtn: document.getElementById('playlistPlayBtn'),
+  playlistSkipBtn: document.getElementById('playlistSkipBtn'),
   playlistRandomBtn: document.getElementById('playlistRandomBtn'),
   playlistRepeatBtn: document.getElementById('playlistRepeatBtn'),
   playlistRepeatIcon: document.getElementById('playlistRepeatIcon'),
@@ -81,6 +86,8 @@ const el = {
   playlistAuthorInput: document.getElementById('playlistAuthorInput'),
   playlistDescriptionInput: document.getElementById('playlistDescriptionInput'),
   audioPlayer: document.getElementById('audioPlayer'),
+  playerLikeBtn: document.getElementById('playerLikeBtn'),
+  playerAddPlaylistBtn: document.getElementById('playerAddPlaylistBtn'),
   snackbar: document.getElementById('snackbar'),
   statusText: document.getElementById('statusText'),
   pathInput: document.getElementById('pathInput'),
@@ -96,29 +103,716 @@ const el = {
   // Mode switching
   browseModeBtn: document.getElementById('browseModeBtn'),
   libraryModeBtn: document.getElementById('libraryModeBtn'),
+  visualizeModeBtn: document.getElementById('visualizeModeBtn'),
   modeDescription: document.getElementById('modeDescription'),
   browseSidebar: document.getElementById('browseSidebar'),
   librarySidebar: document.getElementById('librarySidebar'),
+  visualizeSidebar: document.getElementById('visualizeSidebar'),
   browseToolbar: document.getElementById('browseToolbar'),
   libraryToolbar: document.getElementById('libraryToolbar'),
+  visualizeToolbar: document.getElementById('visualizeToolbar'),
   browseContent: document.getElementById('browseContent'),
   libraryContent: document.getElementById('libraryContent'),
+  visualizeContent: document.getElementById('visualizeContent'),
   // Library elements
   librarySearchInput: document.getElementById('librarySearchInput'),
   libraryRefreshBtn: document.getElementById('libraryRefreshBtn'),
   libraryList: document.getElementById('libraryList'),
   libraryPagination: document.getElementById('libraryPagination'),
   libraryEmptyState: document.getElementById('libraryEmptyState'),
-  librarySubtitle: document.getElementById('librarySubtitle')
+  librarySubtitle: document.getElementById('librarySubtitle'),
+  visualizeTrackInfo: document.getElementById('visualizeTrackInfo'),
+  visualizeConfidence: document.getElementById('visualizeConfidence'),
+  visualizeElapsed: document.getElementById('visualizeElapsed'),
+  visualizeInstantEnergy: document.getElementById('visualizeInstantEnergy'),
+  visualizeInstantTension: document.getElementById('visualizeInstantTension'),
+  visualizeInstantTemperament: document.getElementById('visualizeInstantTemperament'),
+  visualizeInstantStability: document.getElementById('visualizeInstantStability'),
+  visualizeBarInstantEnergy: document.getElementById('visualizeBarInstantEnergy'),
+  visualizeBarShortEnergy: document.getElementById('visualizeBarShortEnergy'),
+  visualizeBarLongEnergy: document.getElementById('visualizeBarLongEnergy'),
+  visualizeBarInstantTension: document.getElementById('visualizeBarInstantTension'),
+  visualizeBarShortTension: document.getElementById('visualizeBarShortTension'),
+  visualizeBarLongTension: document.getElementById('visualizeBarLongTension'),
+  visualizeBarInstantTemperament: document.getElementById('visualizeBarInstantTemperament'),
+  visualizeBarShortTemperament: document.getElementById('visualizeBarShortTemperament'),
+  visualizeBarLongTemperament: document.getElementById('visualizeBarLongTemperament'),
+  visualizeBarInstantStability: document.getElementById('visualizeBarInstantStability'),
+  visualizeBarShortStability: document.getElementById('visualizeBarShortStability'),
+  visualizeBarLongStability: document.getElementById('visualizeBarLongStability')
 };
 
 let snackbarTimer = null;
 let librarySearchDebounceTimer = null;
+const likedTrackPaths = new Set();
 const themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 const PLAYLIST_STORAGE_KEY = 'moo_saved_playlists';
+const CURRENT_PLAYLIST_STORAGE_KEY = 'moo_current_playlist';
+const ACTIVE_PLAYLIST_STORAGE_KEY = 'moo_active_playlist';
 const CRON_INTERVAL_MS = 60000;
+const AUDIO_ANALYSIS_INTERVAL_MS = 40;
+const AUDIO_ANALYSIS_UI_INTERVAL_MS = 320;
+const AUDIO_ANALYSIS_SHORT_ALPHA = 0.08;
+const AUDIO_ANALYSIS_LONG_ALPHA = 0.01;
+const AUDIO_ANALYSIS_LONG_ALPHA_FAST = 0.035;
+const AUDIO_ANALYSIS_DRIFT_THRESHOLD = 0.18;
+const AUDIO_ANALYSIS_DRIFT_UPDATES = 6;
+const AUDIO_ANALYSIS_SILENCE_RMS_THRESHOLD = 0.008;
+const AUDIO_ANALYSIS_SILENCE_PEAK_THRESHOLD = 0.02;
+const AUDIO_ANALYSIS_SILENCE_SPECTRUM_THRESHOLD = 0.018;
+const AUDIO_ANALYSIS_SILENCE_CONSECUTIVE_FRAMES = 4;
+const AUDIO_ANALYSIS_ONSET_THRESHOLD = 0.34;
+const AUDIO_ANALYSIS_ONSET_MIN_GAP_MS = 90;
+const AUDIO_FEATURE_BOUNDS = {
+  rms: { min: 0.015, max: 0.45 },
+  peak: { min: 0.05, max: 1.0 },
+  zeroCrossingRate: { min: 0.01, max: 0.3 },
+  spectralCentroidHz: { min: 700, max: 4200 },
+  spectralFlux: { min: 0.002, max: 0.08 },
+  lowBandRatio: { min: 0.05, max: 0.75 },
+  midBandRatio: { min: 0.05, max: 0.8 },
+  highBandRatio: { min: 0.01, max: 0.55 },
+  highPresenceRatio: { min: 0.005, max: 0.35 },
+  dynamicVariation: { min: 0.005, max: 0.3 },
+  spectralVariation: { min: 0.003, max: 0.28 },
+  transientSharpness: { min: 0.008, max: 0.22 },
+  fluxVariance: { min: 0.002, max: 0.22 },
+  rhythmicDensity: { min: 0.2, max: 4.5 },
+  ioiVariance: { min: 0.002, max: 0.08 },
+  temporalCompression: { min: 0.15, max: 0.95 }
+};
 let wakeLock = null;
 let wakeLockEnabled = 'wakeLock' in navigator;
+let audioAnalysisFrameId = 0;
+let audioAnalysisLastSampleAt = 0;
+let audioAnalysisLastUiUpdateAt = 0;
+
+const audioAnalysis = {
+  context: null,
+  source: null,
+  analyser: null,
+  timeData: null,
+  freqData: null,
+  prevFreqData: null,
+  featureHistory: [],
+  onsetHistory: [],
+  onsetTimes: [],
+  ioiHistory: [],
+  rhythmFluxHistory: [],
+  dynamicHistory: [],
+  activeFrameHistory: [],
+  states: createEmptyEmotionState(),
+  confidence: 0,
+  elapsedMs: 0,
+  driftCounters: {
+    energy: 0,
+    tension: 0,
+    temperament: 0,
+    stability: 0
+  },
+  silenceFrames: 0,
+  activeTrackPath: ''
+};
+
+function normalizeLibrarySearchQuery(query) {
+  const source = String(query || '').trim();
+  if (!source.length) {
+    return '';
+  }
+
+  return source
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u00DF/g, 'ss')
+    .replace(/\u00C6/g, 'AE')
+    .replace(/\u00E6/g, 'ae')
+    .replace(/\u0152/g, 'OE')
+    .replace(/\u0153/g, 'oe')
+    .replace(/\u00D8/g, 'O')
+    .replace(/\u00F8/g, 'o')
+    .replace(/\u0110/g, 'D')
+    .replace(/\u0111/g, 'd')
+    .replace(/\u0141/g, 'L')
+    .replace(/\u0142/g, 'l')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalize(value, min, max) {
+  if (max <= min) {
+    return 0;
+  }
+
+  return clamp((value - min) / (max - min), 0, 1);
+}
+
+function createEmotionVector() {
+  return {
+    energy: 0,
+    tension: 0,
+    temperament: 0,
+    stability: 0
+  };
+}
+
+function createEmptyEmotionState() {
+  return {
+    instant: createEmotionVector(),
+    shortTerm: createEmotionVector(),
+    longTerm: createEmotionVector()
+  };
+}
+
+function averageValues(values) {
+  if (!Array.isArray(values) || !values.length) {
+    return 0;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function pushLimited(list, value, limit) {
+  list.push(value);
+  while (list.length > limit) {
+    list.shift();
+  }
+}
+
+function normalizeFeature(name, value) {
+  const bounds = AUDIO_FEATURE_BOUNDS[name];
+  if (!bounds) {
+    return 0;
+  }
+
+  return normalize(value, bounds.min, bounds.max);
+}
+
+function smoothEmotionVector(nextVector, prevVector, alpha) {
+  return {
+    energy: prevVector.energy + ((nextVector.energy - prevVector.energy) * alpha),
+    tension: prevVector.tension + ((nextVector.tension - prevVector.tension) * alpha),
+    temperament: prevVector.temperament + ((nextVector.temperament - prevVector.temperament) * alpha),
+    stability: prevVector.stability + ((nextVector.stability - prevVector.stability) * alpha)
+  };
+}
+
+function resetAudioAnalysisState() {
+  audioAnalysis.featureHistory = [];
+  audioAnalysis.onsetHistory = [];
+  audioAnalysis.onsetTimes = [];
+  audioAnalysis.ioiHistory = [];
+  audioAnalysis.rhythmFluxHistory = [];
+  audioAnalysis.dynamicHistory = [];
+  audioAnalysis.activeFrameHistory = [];
+  audioAnalysis.prevFreqData = null;
+  audioAnalysis.states = createEmptyEmotionState();
+  audioAnalysis.confidence = 0;
+  audioAnalysis.elapsedMs = 0;
+  audioAnalysis.driftCounters = {
+    energy: 0,
+    tension: 0,
+    temperament: 0,
+    stability: 0
+  };
+  audioAnalysis.silenceFrames = 0;
+  audioAnalysisLastSampleAt = 0;
+  audioAnalysisLastUiUpdateAt = 0;
+}
+
+function stopAudioAnalysisLoop() {
+  if (audioAnalysisFrameId) {
+    cancelAnimationFrame(audioAnalysisFrameId);
+    audioAnalysisFrameId = 0;
+  }
+}
+
+function resetVisualizationUi() {
+  el.visualizeTrackInfo.innerHTML = 'Des infos seront visibles en cours de lecture.';
+  el.visualizeConfidence.textContent = 'Confiance 0%';
+  el.visualizeElapsed.textContent = '0 ms analyses';
+  el.visualizeInstantEnergy.textContent = '0.00';
+  el.visualizeInstantTension.textContent = '0.00';
+  el.visualizeInstantTemperament.textContent = '0.00';
+  el.visualizeInstantStability.textContent = '0.00';
+
+  [
+    el.visualizeBarInstantEnergy,
+    el.visualizeBarShortEnergy,
+    el.visualizeBarLongEnergy,
+    el.visualizeBarInstantTension,
+    el.visualizeBarShortTension,
+    el.visualizeBarLongTension,
+    el.visualizeBarInstantStability,
+    el.visualizeBarShortStability,
+    el.visualizeBarLongStability
+  ].forEach((bar) => {
+    bar.style.width = '0%';
+  });
+
+  [
+    el.visualizeBarInstantTemperament,
+    el.visualizeBarShortTemperament,
+    el.visualizeBarLongTemperament
+  ].forEach((bar) => {
+    bar.style.left = '50%';
+    bar.style.width = '0%';
+  });
+
+  document.querySelectorAll('.emotion-row-value').forEach((node) => {
+    node.textContent = '0.00';
+  });
+}
+
+function renderVisualizationTrackInfo(track) {
+  if (!track) {
+    resetVisualizationUi();
+    return;
+  }
+
+  const rawName = String(track.name || track.title || 'Piste inconnue');
+  const displayName = rawName.replace(/\.[^.\\\/]+$/, '') || rawName;
+  const path = escapeHtml(track.path || '');
+
+  el.visualizeTrackInfo.innerHTML = `
+    <div><strong>${escapeHtml(displayName)}</strong></div>
+    ${path ? `<div title="${path}" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${path}</div>` : ''}
+  `;
+}
+
+function setEmotionBar(bar, value) {
+  bar.style.width = `${clamp(value, 0, 1) * 100}%`;
+}
+
+function setBipolarEmotionBar(bar, value) {
+  const normalized = clamp(value, -1, 1);
+  if (normalized >= 0) {
+    bar.style.left = '50%';
+    bar.style.width = `${normalized * 50}%`;
+    return;
+  }
+
+  bar.style.left = `${50 + (normalized * 50)}%`;
+  bar.style.width = `${Math.abs(normalized) * 50}%`;
+}
+
+function renderEmotionState() {
+  const { instant, shortTerm, longTerm } = audioAnalysis.states;
+
+  el.visualizeConfidence.textContent = `Confiance ${Math.round(audioAnalysis.confidence * 100)}%`;
+  el.visualizeElapsed.textContent = `${Math.round(audioAnalysis.elapsedMs)} ms analyses`;
+  el.visualizeInstantEnergy.textContent = longTerm.energy.toFixed(2);
+  el.visualizeInstantTension.textContent = longTerm.tension.toFixed(2);
+  el.visualizeInstantTemperament.textContent = longTerm.temperament.toFixed(2);
+  el.visualizeInstantStability.textContent = longTerm.stability.toFixed(2);
+
+  setEmotionBar(el.visualizeBarInstantEnergy, instant.energy);
+  setEmotionBar(el.visualizeBarShortEnergy, shortTerm.energy);
+  setEmotionBar(el.visualizeBarLongEnergy, longTerm.energy);
+  setEmotionBar(el.visualizeBarInstantTension, instant.tension);
+  setEmotionBar(el.visualizeBarShortTension, shortTerm.tension);
+  setEmotionBar(el.visualizeBarLongTension, longTerm.tension);
+  setEmotionBar(el.visualizeBarInstantStability, instant.stability);
+  setEmotionBar(el.visualizeBarShortStability, shortTerm.stability);
+  setEmotionBar(el.visualizeBarLongStability, longTerm.stability);
+  setBipolarEmotionBar(el.visualizeBarInstantTemperament, instant.temperament);
+  setBipolarEmotionBar(el.visualizeBarShortTemperament, shortTerm.temperament);
+  setBipolarEmotionBar(el.visualizeBarLongTemperament, longTerm.temperament);
+
+  document.querySelectorAll('.emotion-row-value').forEach((node) => {
+    const dimension = node.dataset.dimension;
+    const scope = node.dataset.scope;
+    const source = scope === 'instant'
+      ? instant
+      : (scope === 'short' ? shortTerm : longTerm);
+    const value = typeof source[dimension] === 'number' ? source[dimension] : 0;
+    node.textContent = value.toFixed(2);
+  });
+}
+
+function computeZeroCrossingRate(timeData) {
+  let crossings = 0;
+
+  for (let i = 1; i < timeData.length; i += 1) {
+    const previous = (timeData[i - 1] - 128) / 128;
+    const current = (timeData[i] - 128) / 128;
+    if ((previous >= 0 && current < 0) || (previous < 0 && current >= 0)) {
+      crossings += 1;
+    }
+  }
+
+  return crossings / Math.max(1, timeData.length - 1);
+}
+
+function computeAudioFeatures() {
+  if (!audioAnalysis.analyser || !audioAnalysis.timeData || !audioAnalysis.freqData) {
+    return null;
+  }
+
+  audioAnalysis.analyser.getByteTimeDomainData(audioAnalysis.timeData);
+  audioAnalysis.analyser.getByteFrequencyData(audioAnalysis.freqData);
+
+  const timeData = audioAnalysis.timeData;
+  const freqData = audioAnalysis.freqData;
+  const binCount = freqData.length;
+  const sampleRate = audioAnalysis.context?.sampleRate || 44100;
+  const nyquist = sampleRate / 2;
+  const binFrequency = nyquist / Math.max(1, binCount);
+
+  let rmsAccumulator = 0;
+  let peak = 0;
+
+  for (let i = 0; i < timeData.length; i += 1) {
+    const sample = (timeData[i] - 128) / 128;
+    rmsAccumulator += sample * sample;
+    peak = Math.max(peak, Math.abs(sample));
+  }
+
+  const rms = Math.sqrt(rmsAccumulator / Math.max(1, timeData.length));
+  const zeroCrossingRate = computeZeroCrossingRate(timeData);
+
+  let totalMagnitude = 0;
+  let weightedMagnitude = 0;
+  let lowBand = 0;
+  let midBand = 0;
+  let highBand = 0;
+  let highPresenceBand = 0;
+  let spectralFluxRaw = 0;
+
+  for (let i = 0; i < binCount; i += 1) {
+    const magnitude = freqData[i] / 255;
+    const frequency = i * binFrequency;
+    totalMagnitude += magnitude;
+    weightedMagnitude += magnitude * frequency;
+
+    if (frequency < 250) {
+      lowBand += magnitude;
+    }
+    else if (frequency < 2000) {
+      midBand += magnitude;
+    }
+    else {
+      highBand += magnitude;
+    }
+
+    if (frequency >= 4000) {
+      highPresenceBand += magnitude;
+    }
+
+    if (audioAnalysis.prevFreqData) {
+      const diff = magnitude - audioAnalysis.prevFreqData[i];
+      if (diff > 0) {
+        spectralFluxRaw += diff;
+      }
+    }
+  }
+
+  const spectralCentroidHz = totalMagnitude > 0 ? weightedMagnitude / totalMagnitude : 0;
+  const totalBand = Math.max(totalMagnitude, 0.0001);
+  const averageSpectrumMagnitude = totalMagnitude / Math.max(1, binCount);
+  const lowBandRatioRaw = lowBand / totalBand;
+  const midBandRatioRaw = midBand / totalBand;
+  const highBandRatioRaw = highBand / totalBand;
+  const highPresenceRatioRaw = highPresenceBand / totalBand;
+  const spectralFluxRawNormalized = spectralFluxRaw / Math.max(1, binCount);
+
+  const isSilentFrame = (
+    rms <= AUDIO_ANALYSIS_SILENCE_RMS_THRESHOLD
+    && peak <= AUDIO_ANALYSIS_SILENCE_PEAK_THRESHOLD
+    && averageSpectrumMagnitude <= AUDIO_ANALYSIS_SILENCE_SPECTRUM_THRESHOLD
+  );
+
+  if (isSilentFrame) {
+    audioAnalysis.silenceFrames += 1;
+  }
+  else {
+    audioAnalysis.silenceFrames = 0;
+  }
+
+  if (audioAnalysis.silenceFrames >= AUDIO_ANALYSIS_SILENCE_CONSECUTIVE_FRAMES) {
+    audioAnalysis.prevFreqData = null;
+    return null;
+  }
+
+  audioAnalysis.prevFreqData = Array.from(freqData, (value) => value / 255);
+
+  return {
+    rmsRaw: rms,
+    peakRaw: peak,
+    averageSpectrumMagnitude,
+    analysisTimeMs: (el.audioPlayer.currentTime || 0) * 1000,
+    rms: normalizeFeature('rms', rms),
+    peak: normalizeFeature('peak', peak),
+    zeroCrossingRate: normalizeFeature('zeroCrossingRate', zeroCrossingRate),
+    spectralCentroid: normalizeFeature('spectralCentroidHz', spectralCentroidHz),
+    spectralFlux: normalizeFeature('spectralFlux', spectralFluxRawNormalized),
+    lowBandRatio: normalizeFeature('lowBandRatio', lowBandRatioRaw),
+    midBandRatio: normalizeFeature('midBandRatio', midBandRatioRaw),
+    highBandRatio: normalizeFeature('highBandRatio', highBandRatioRaw),
+    highPresenceRatio: normalizeFeature('highPresenceRatio', highPresenceRatioRaw)
+  };
+}
+
+function updateAudioEmotionState(features) {
+  if (!features) {
+    return;
+  }
+
+  const previousFeatures = audioAnalysis.featureHistory[audioAnalysis.featureHistory.length - 1] || null;
+  const dynamicVariationRaw = previousFeatures ? Math.abs(features.rms - previousFeatures.rms) : 0;
+  const spectralVariationRaw = previousFeatures ? Math.abs(features.spectralCentroid - previousFeatures.spectralCentroid) : 0;
+  const transientSharpnessRaw = Math.max(0, features.peak - features.rms);
+  const dynamicVariation = normalizeFeature('dynamicVariation', dynamicVariationRaw);
+  const spectralVariation = normalizeFeature('spectralVariation', spectralVariationRaw);
+  const transientSharpness = normalizeFeature('transientSharpness', transientSharpnessRaw);
+  const roughnessProxy = clamp((features.highBandRatio * 0.6) + (features.zeroCrossingRate * 0.4), 0, 1);
+  const highBandPressure = clamp((features.highBandRatio * 0.65) + (features.spectralCentroid * 0.35), 0, 1);
+  const onsetDensity = clamp((features.spectralFlux * 0.7) + (transientSharpness * 0.3), 0, 1);
+  const onsetStrength = clamp((features.spectralFlux * 0.55) + (transientSharpness * 0.45), 0, 1);
+  const isActiveFrame = features.rmsRaw > AUDIO_ANALYSIS_SILENCE_RMS_THRESHOLD
+    || features.peakRaw > AUDIO_ANALYSIS_SILENCE_PEAK_THRESHOLD
+    || features.averageSpectrumMagnitude > AUDIO_ANALYSIS_SILENCE_SPECTRUM_THRESHOLD;
+
+  pushLimited(audioAnalysis.activeFrameHistory, isActiveFrame ? 1 : 0, 120);
+
+  const lastOnsetTime = audioAnalysis.onsetTimes[audioAnalysis.onsetTimes.length - 1] || 0;
+  if (
+    onsetStrength >= AUDIO_ANALYSIS_ONSET_THRESHOLD
+    && (!lastOnsetTime || (features.analysisTimeMs - lastOnsetTime) >= AUDIO_ANALYSIS_ONSET_MIN_GAP_MS)
+  ) {
+    if (lastOnsetTime) {
+      pushLimited(audioAnalysis.ioiHistory, (features.analysisTimeMs - lastOnsetTime) / 1000, 48);
+    }
+    pushLimited(audioAnalysis.onsetTimes, features.analysisTimeMs, 48);
+  }
+
+  pushLimited(audioAnalysis.featureHistory, features, 180);
+  pushLimited(audioAnalysis.dynamicHistory, dynamicVariation, 90);
+  pushLimited(audioAnalysis.onsetHistory, onsetDensity, 90);
+  pushLimited(audioAnalysis.rhythmFluxHistory, features.spectralFlux, 90);
+
+  const averagedDynamicVariation = averageValues(audioAnalysis.dynamicHistory);
+  const averagedSpectralFlux = averageValues(audioAnalysis.rhythmFluxHistory);
+  const averageOnsetDensity = averageValues(audioAnalysis.onsetHistory);
+
+  const fluxVarianceRaw = averageValues(
+    audioAnalysis.rhythmFluxHistory.map((value) => Math.abs(value - averagedSpectralFlux))
+  );
+  const fluxVariance = normalizeFeature('fluxVariance', fluxVarianceRaw);
+  const recentWindowSeconds = 6;
+  const recentOnsets = audioAnalysis.onsetTimes.filter((timeMs) => (features.analysisTimeMs - timeMs) <= (recentWindowSeconds * 1000));
+  const rhythmicDensityRaw = recentOnsets.length / recentWindowSeconds;
+  const rhythmicDensity = normalizeFeature('rhythmicDensity', rhythmicDensityRaw);
+  const temporalCompressionRaw = averageValues(audioAnalysis.activeFrameHistory);
+  const temporalCompression = normalizeFeature('temporalCompression', temporalCompressionRaw);
+  const averageIoi = averageValues(audioAnalysis.ioiHistory);
+  const ioiVarianceRaw = averageValues(
+    audioAnalysis.ioiHistory.map((ioi) => Math.abs(ioi - averageIoi))
+  );
+  const ioiVariance = normalizeFeature('ioiVariance', ioiVarianceRaw);
+  const rhythmicPressure = clamp(rhythmicDensity * (1 - ioiVariance), 0, 1);
+  const lowDynamicVariation = clamp(1 - averagedDynamicVariation, 0, 1);
+  const lowHighFreqPresence = clamp(1 - features.highPresenceRatio, 0, 1);
+  const lowEnergyContinuity = clamp(
+    (0.55 * (1 - features.rms))
+    + (0.45 * temporalCompression),
+    0,
+    1
+  );
+  const spectralWarmth = clamp(
+    (0.60 * features.lowBandRatio)
+    + (0.40 * (1 - features.highPresenceRatio)),
+    0,
+    1
+  );
+
+  const rhythmIrregularity = clamp((fluxVariance * 1.8) + (averagedDynamicVariation * 0.45), 0, 1);
+  const tempoConfidence = clamp(1 - (fluxVariance * 1.4), 0, 1);
+  const sectionChangeProbability = clamp((spectralVariation * 0.6) + (dynamicVariation * 0.4), 0, 1);
+  const noiseRoughness = clamp((roughnessProxy * 0.55) + (features.spectralFlux * 0.45), 0, 1);
+
+  const energyRaw = clamp(
+    (0.45 * features.rms)
+    + (0.20 * features.spectralFlux)
+    + (0.20 * averageOnsetDensity)
+    + (0.15 * features.lowBandRatio),
+    0,
+    1
+  );
+
+  const tensionRaw = clamp(
+    (0.30 * roughnessProxy)
+    + (0.25 * features.spectralFlux)
+    + (0.25 * ioiVariance)
+    + (0.20 * averagedDynamicVariation)
+    + (0.10 * rhythmIrregularity)
+    + (0.10 * highBandPressure),
+    0,
+    1
+  );
+
+  const aggressivenessRaw = clamp(
+    (0.35 * rhythmicPressure)
+    + (0.15 * temporalCompression)
+    + (0.20 * features.highPresenceRatio)
+    + (0.15 * features.spectralFlux)
+    + (0.15 * (1 - ioiVariance)),
+    0,
+    1
+  );
+
+  const softnessRaw = clamp(
+    (0.30 * lowEnergyContinuity)
+    + (0.25 * spectralWarmth)
+    + (0.25 * lowDynamicVariation)
+    + (0.20 * lowHighFreqPresence),
+    0,
+    1
+  );
+
+  const temperamentValue = clamp(aggressivenessRaw - softnessRaw, -1, 1);
+
+  const stabilityRaw = clamp(
+    (0.30 * (1 - rhythmIrregularity))
+    + (0.25 * (1 - averagedDynamicVariation))
+    + (0.20 * (1 - features.spectralFlux))
+    + (0.15 * tempoConfidence)
+    + (0.10 * (1 - sectionChangeProbability)),
+    0,
+    1
+  );
+
+  audioAnalysis.states.instant = {
+    energy: energyRaw,
+    tension: tensionRaw,
+    temperament: temperamentValue,
+    stability: stabilityRaw
+  };
+
+  audioAnalysis.states.shortTerm = smoothEmotionVector(
+    audioAnalysis.states.instant,
+    audioAnalysis.states.shortTerm,
+    AUDIO_ANALYSIS_SHORT_ALPHA
+  );
+
+  const longNext = {};
+  ['energy', 'tension', 'temperament', 'stability'].forEach((dimension) => {
+    const shortValue = audioAnalysis.states.shortTerm[dimension];
+    const longValue = audioAnalysis.states.longTerm[dimension];
+    const delta = Math.abs(shortValue - longValue);
+
+    if (delta > AUDIO_ANALYSIS_DRIFT_THRESHOLD) {
+      audioAnalysis.driftCounters[dimension] += 1;
+    }
+    else {
+      audioAnalysis.driftCounters[dimension] = 0;
+    }
+
+    const baseAlpha = dimension === 'temperament' ? 0.02 : AUDIO_ANALYSIS_LONG_ALPHA;
+    const fastAlpha = dimension === 'temperament' ? 0.055 : AUDIO_ANALYSIS_LONG_ALPHA_FAST;
+    const alpha = audioAnalysis.driftCounters[dimension] >= AUDIO_ANALYSIS_DRIFT_UPDATES
+      ? fastAlpha
+      : baseAlpha;
+
+    longNext[dimension] = longValue + ((shortValue - longValue) * alpha);
+  });
+
+  audioAnalysis.states.longTerm = longNext;
+  audioAnalysis.elapsedMs = (el.audioPlayer.currentTime || 0) * 1000;
+  audioAnalysis.confidence = clamp(
+    normalize(audioAnalysis.featureHistory.length, 1, 40) * 0.75
+    + (tempoConfidence * 0.15)
+    + ((1 - fluxVariance) * 0.10),
+    0,
+    1
+  );
+}
+
+function ensureAudioAnalysisContext() {
+  if (audioAnalysis.context && audioAnalysis.analyser && audioAnalysis.source) {
+    return true;
+  }
+
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) {
+    return false;
+  }
+
+  if (!audioAnalysis.context) {
+    audioAnalysis.context = new AudioContextCtor();
+  }
+
+  if (!audioAnalysis.source) {
+    audioAnalysis.source = audioAnalysis.context.createMediaElementSource(el.audioPlayer);
+  }
+
+  if (!audioAnalysis.analyser) {
+    audioAnalysis.analyser = audioAnalysis.context.createAnalyser();
+    audioAnalysis.analyser.fftSize = 2048;
+    audioAnalysis.analyser.smoothingTimeConstant = 0.78;
+    audioAnalysis.source.connect(audioAnalysis.analyser);
+    audioAnalysis.source.connect(audioAnalysis.context.destination);
+    audioAnalysis.timeData = new Uint8Array(audioAnalysis.analyser.fftSize);
+    audioAnalysis.freqData = new Uint8Array(audioAnalysis.analyser.frequencyBinCount);
+  }
+
+  return true;
+}
+
+async function ensureAudioAnalysisRunning() {
+  const ready = ensureAudioAnalysisContext();
+  if (!ready) {
+    return;
+  }
+
+  if (audioAnalysis.context.state === 'suspended') {
+    try {
+      await audioAnalysis.context.resume();
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+
+  if (!audioAnalysisFrameId) {
+    audioAnalysisLoop();
+  }
+}
+
+function audioAnalysisLoop(now = performance.now()) {
+  audioAnalysisFrameId = requestAnimationFrame(audioAnalysisLoop);
+
+  if (!audioAnalysis.analyser || el.audioPlayer.paused || el.audioPlayer.ended || !state.currentTrack) {
+    return;
+  }
+
+  if (!audioAnalysisLastSampleAt || (now - audioAnalysisLastSampleAt) >= AUDIO_ANALYSIS_INTERVAL_MS) {
+    const features = computeAudioFeatures();
+    updateAudioEmotionState(features);
+    audioAnalysisLastSampleAt = now;
+  }
+
+  if (!audioAnalysisLastUiUpdateAt || (now - audioAnalysisLastUiUpdateAt) >= AUDIO_ANALYSIS_UI_INTERVAL_MS) {
+    renderEmotionState();
+    audioAnalysisLastUiUpdateAt = now;
+  }
+}
+
+function syncVisualizationTrack(track) {
+  const nextTrackPath = track?.path || '';
+  if (audioAnalysis.activeTrackPath !== nextTrackPath) {
+    audioAnalysis.activeTrackPath = nextTrackPath;
+    resetAudioAnalysisState();
+  }
+
+  renderVisualizationTrackInfo(track);
+  renderEmotionState();
+}
 
 function startCronPolling() {
   setInterval(() => {
@@ -187,10 +881,11 @@ function syncContentFilterButtons() {
 function setStatus(message, isError = false) {
   el.statusText.textContent = message;
   el.statusText.className = isError ? 'danger' : '';
+  el.statusText.hidden = true;
 }
 
 function syncPlaylistModeButtons() {
-  el.playlistRandomBtn.setAttribute('aria-pressed', state.randomMode ? 'true' : 'false');
+  el.playlistRandomBtn.setAttribute('aria-pressed', 'false');
   el.playlistRepeatBtn.setAttribute('aria-pressed', state.repeatMode ? 'true' : 'false');
   el.playlistRepeatIcon.textContent = state.repeatMode ? 'repeat_on' : 'repeat';
 }
@@ -217,6 +912,26 @@ function applyTheme() {
 function setThemeMode(mode) {
   state.themeMode = mode;
   applyTheme();
+}
+
+function syncPlayerActions() {
+  const hasCurrentTrack = Boolean(state.currentTrack && state.currentTrack.path);
+  const currentPath = hasCurrentTrack ? state.currentTrack.path : '';
+  const isLiked = hasCurrentTrack && likedTrackPaths.has(currentPath);
+
+  el.playerLikeBtn.disabled = !hasCurrentTrack;
+  el.playerAddPlaylistBtn.disabled = !hasCurrentTrack;
+  el.playerLikeBtn.setAttribute('aria-pressed', isLiked ? 'true' : 'false');
+}
+
+function renderLibraryWelcomeState() {
+  state.libraryTracks = [];
+  state.libraryTotalCount = 0;
+  el.libraryList.innerHTML = '';
+  el.librarySubtitle.textContent = 'Recherche un titre, un artiste ou un album';
+  el.libraryEmptyState.hidden = false;
+  el.libraryEmptyState.textContent = 'Lance une recherche dans la bibliotheque ou, s il n y a pas encore d index, passe en mode explorer et selectionne les dossiers a analyser.';
+  renderLibraryPagination();
 }
 
 function switchMode(mode) {
@@ -270,7 +985,6 @@ function initializeBrowseMode() {
 function initializeLibraryMode() {
   // Will be called when switching to library mode
   el.libraryEmptyState.hidden = true;
-  el.libraryPagination.hidden = true;
   el.libraryPagination.innerHTML = '';
   el.libraryList.innerHTML = '';
   el.librarySubtitle.textContent = 'Chargement...';
@@ -279,39 +993,107 @@ function initializeLibraryMode() {
   loadLibraryTracks();
 }
 
-function buildLibraryDomain(query) {
-  const normalizedQuery = String(query || '').trim();
+function getLibraryQueryParts(query) {
+  const normalizedQuery = normalizeLibrarySearchQuery(query);
   if (!normalizedQuery.length) {
     return [];
   }
 
-  const parts = normalizedQuery.split(/\s+/).slice(0, 4);
-  // #todo - allow field-specific search (e.g. "artist:beatles album:abbey")
-  const fields = ['name', 'title', 'artist', 'album'];
-  let clauses = [[]];
+  return normalizedQuery.split(/\s+/).slice(0, 8);
+}
 
-  for (const part of parts) {
-    const nextClauses = [];
+async function fetchLibraryTracksBatch({ start = 0, limit = state.libraryPageSize, domain = [] } = {}) {
+  const params = new URLSearchParams({
+    get: 'moomuse_Track_collect',
+    limit,
+    start,
+    order: 'title',
+    fields: '{id,name,path,full_path,extension,size,artist,title,album,drive_id}'
+  });
 
-    for (const clause of clauses) {
-      for (const field of fields) {
-        nextClauses.push([
-          ...clause,
-          [field, 'ilike', `%${part}%`]
-        ]);
-      }
-    }
-
-    clauses = nextClauses;
+  if (domain.length) {
+    params.append('domain', JSON.stringify(domain));
   }
 
-  return clauses;
+  const response = await fetch(`/?${params.toString()}`);
+  const result = await response.json();
+  const collection = Array.isArray(result) ? result.map((track) => normalizeTrack(track)) : [];
+  const totalCountHeader = response.headers.get('X-Total-Count');
+  const totalCount = totalCountHeader ? Number.parseInt(totalCountHeader, 10) : collection.length;
+
+  return {
+    collection,
+    totalCount: Number.isFinite(totalCount) ? totalCount : collection.length
+  };
+}
+
+function updateLibraryResults(collection, subtitle) {
+  state.libraryTracks = collection;
+  state.libraryTotalCount = collection.length;
+  renderLibraryList();
+  el.librarySubtitle.textContent = subtitle;
+  el.libraryEmptyState.hidden = collection.length > 0;
+}
+
+async function fetchLibrarySearchResults(query, limit = LIBRARY_SEARCH_LIMIT) {
+  const params = new URLSearchParams({
+    get: 'moomuse_Track_search',
+    q: query,
+    limit
+  });
+
+  const response = await fetch(`/?${params.toString()}`);
+  const result = await response.json();
+  return Array.isArray(result) ? result.map((track) => normalizeTrack(track)) : [];
+}
+
+async function refreshLibraryResults(start = state.libraryStart) {
+  const requestId = ++state.libraryRequestId;
+  state.libraryStart = Math.max(0, Number(start) || 0);
+  state.libraryPage = 1;
+
+  el.libraryEmptyState.hidden = true;
+  el.librarySubtitle.textContent = 'Recherche...';
+
+  try {
+    const results = await fetchLibrarySearchResults(state.libraryQuery, LIBRARY_SEARCH_LIMIT);
+
+    if (requestId !== state.libraryRequestId) {
+      return;
+    }
+
+    updateLibraryResults(
+      results,
+      results.length
+        ? `${results.length} resultat(s)`
+        : 'Aucun resultat'
+    );
+  }
+  catch (error) {
+    if (requestId !== state.libraryRequestId) {
+      return;
+    }
+
+    console.error('Erreur lors de la recherche dans la bibliotheque:', error);
+    state.libraryTracks = [];
+    state.libraryTotalCount = 0;
+    el.libraryList.innerHTML = '';
+    el.libraryEmptyState.hidden = false;
+    el.librarySubtitle.textContent = 'Erreur lors de la recherche';
+    renderLibraryPagination();
+  }
 }
 
 async function loadLibraryTracks(start = state.libraryStart) {
+  const requestId = ++state.libraryRequestId;
+
+  if (getLibraryQueryParts(state.libraryQuery).length) {
+    await refreshLibraryResults(start);
+    return;
+  }
+
   try {
     el.libraryEmptyState.hidden = true;
-    el.libraryPagination.hidden = true;
     el.libraryPagination.innerHTML = '';
     el.libraryList.innerHTML = '';
     el.librarySubtitle.textContent = 'Chargement...';
@@ -319,28 +1101,17 @@ async function loadLibraryTracks(start = state.libraryStart) {
     state.libraryStart = Math.max(0, Number(start) || 0);
     state.libraryPage = Math.floor(state.libraryStart / state.libraryPageSize) + 1;
     
-    // Build the request
-    const params = new URLSearchParams({
-      get: 'moomuse_Track_collect',
-      limit: state.libraryPageSize,
+    const result = await fetchLibraryTracksBatch({
       start: state.libraryStart,
-      order: 'title',
-      fields: '{id,name,path,full_path,extension,size,artist,title,album,drive_id}'
+      limit: state.libraryPageSize
     });
-    
-    const domain = buildLibraryDomain(state.libraryQuery);
-    if (domain.length) {
-      params.append('domain', JSON.stringify(domain));
-    }
-    
-    const response = await fetch(`/?${params.toString()}`);
-    const result = await response.json();
-    const collection = Array.isArray(result) ? result.map((track) => normalizeTrack(track)) : [];
-    const totalCountHeader = response.headers.get('X-Total-Count');
-    const totalCount = totalCountHeader ? Number.parseInt(totalCountHeader, 10) : collection.length;
 
-    state.libraryTracks = collection;
-    state.libraryTotalCount = Number.isFinite(totalCount) ? totalCount : collection.length;
+    if (requestId !== state.libraryRequestId) {
+      return;
+    }
+
+    state.libraryTracks = result.collection;
+    state.libraryTotalCount = result.totalCount;
     
     renderLibraryList();
     el.librarySubtitle.textContent = state.libraryTotalCount
@@ -394,7 +1165,13 @@ function renderLibraryList() {
 
       try {
         const file = await fetchLibraryTrackPlaybackFile(normalizedTrack);
-        addToPlaylist(file.path);
+        const playlistIndex = addToPlaylist(file.path, {
+          statusMessage: `Ajoute a la playlist : ${file.title || file.name}`,
+          snackbarMessage: 'Track ajoutee a la playlist'
+        });
+        if (playlistIndex >= 0) {
+          setStatus(`Ajoute a la playlist : ${file.title || file.name}`);
+        }
       }
       catch (error) {
         console.error(error);
@@ -413,17 +1190,11 @@ function renderLibraryList() {
 }
 
 function renderLibraryPagination() {
-  const totalPages = Math.ceil(state.libraryTotalCount / state.libraryPageSize);
+  const totalPages = Math.max(1, Math.ceil(state.libraryTotalCount / state.libraryPageSize));
   const currentPage = Math.floor(state.libraryStart / state.libraryPageSize) + 1;
   const hasPrevious = state.libraryStart > 0;
   const nextStart = state.libraryStart + state.libraryPageSize;
   const hasNext = nextStart < state.libraryTotalCount;
-
-  if (totalPages <= 1) {
-    el.libraryPagination.hidden = true;
-    el.libraryPagination.innerHTML = '';
-    return;
-  }
 
   const firstStart = 0;
   const previousStart = Math.max(0, state.libraryStart - state.libraryPageSize);
@@ -445,7 +1216,6 @@ function renderLibraryPagination() {
     `<button class="button pagination-btn icon-only" type="button" data-start="${nextStart}" aria-label="Page suivante" title="Page suivante" ${hasNext ? '' : 'disabled'}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>`,
     `<button class="button pagination-btn icon-only" type="button" data-start="${lastStart}" aria-label="Derniere page" title="Derniere page" ${hasNext ? '' : 'disabled'}><span class="material-symbols-outlined" aria-hidden="true">last_page</span></button>`
   ].join('');
-  el.libraryPagination.hidden = false;
 
   el.libraryPagination.querySelectorAll('.pagination-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -544,6 +1314,14 @@ function normalizePlaylistName(name) {
   return trimmed || 'Playlist sans nom';
 }
 
+function getCurrentPlaylistDisplayName() {
+  return normalizePlaylistName(state.currentPlaylistMeta.name);
+}
+
+function renderCurrentPlaylistHeader() {
+  el.currentPlaylistName.textContent = getCurrentPlaylistDisplayName();
+}
+
 function normalizePlaylistAuthor(author) {
   return String(author || '').trim();
 }
@@ -571,7 +1349,17 @@ function normalizePlaylistRecord(item, fallback = {}) {
 }
 
 function getSavedPlaylistItems() {
-  const currentEntry = {
+  if (state.activeSavedPlaylistId !== 'current') {
+    return state.savedPlaylists;
+  }
+
+  const currentPlaylist = getCurrentPlaylistRecord();
+  const remainingPlaylists = state.savedPlaylists.filter((playlist) => playlist.name !== currentPlaylist.name);
+  return [currentPlaylist, ...remainingPlaylists];
+}
+
+function getCurrentPlaylistRecord() {
+  return {
     id: 'current',
     name: normalizePlaylistName(state.currentPlaylistMeta.name),
     author: normalizePlaylistAuthor(state.currentPlaylistMeta.author),
@@ -579,13 +1367,38 @@ function getSavedPlaylistItems() {
     tracks: serializeCurrentPlaylistTracks(),
     system: true
   };
+}
 
-  return [currentEntry, ...state.savedPlaylists];
+function findSavedPlaylistByName(name) {
+  const normalizedName = normalizePlaylistName(name);
+  return state.savedPlaylists.find((playlist) => playlist.name === normalizedName) || null;
+}
+
+function confirmPlaylistOverwrite(name) {
+  return window.confirm(`La playlist "${name}" existe deja. Voulez-vous l ecraser ?`);
 }
 
 function persistSavedPlaylists() {
   try {
     localStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify(state.savedPlaylists));
+  }
+  catch (error) {
+    console.error(error);
+  }
+}
+
+function persistCurrentPlaylist() {
+  try {
+    localStorage.setItem(CURRENT_PLAYLIST_STORAGE_KEY, JSON.stringify(getCurrentPlaylistRecord()));
+  }
+  catch (error) {
+    console.error(error);
+  }
+}
+
+function persistActivePlaylistId() {
+  try {
+    localStorage.setItem(ACTIVE_PLAYLIST_STORAGE_KEY, state.activeSavedPlaylistId || 'current');
   }
   catch (error) {
     console.error(error);
@@ -605,13 +1418,113 @@ function loadSavedPlaylists() {
     }
 
     state.savedPlaylists = parsed
-      .filter((item) => item && ((typeof item.name === 'string' && Array.isArray(item.tracks)) || Array.isArray(item)))
+      .filter((item) => item && item.id !== 'current' && ((typeof item.name === 'string' && Array.isArray(item.tracks)) || Array.isArray(item)))
       .map((item) => normalizePlaylistRecord(item));
   }
   catch (error) {
     console.error(error);
     state.savedPlaylists = [];
   }
+}
+
+function loadCurrentPlaylist() {
+  try {
+    const raw = localStorage.getItem(CURRENT_PLAYLIST_STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw);
+    const playlist = normalizePlaylistRecord(parsed, { id: 'current', name: 'Playlist sans nom' });
+    if (!Array.isArray(playlist.tracks)) {
+      return;
+    }
+
+    state.playlist = playlist.tracks
+      .map((track) => {
+        const fullPath = getPlaylistTrackFullPath(track);
+        if (!fullPath) {
+          return null;
+        }
+
+        state.fileRegistry[fullPath] = normalizeTrack({
+          path: fullPath,
+          full_path: fullPath,
+          track_id: track.track_id ?? null,
+          drive_id: track.drive_id ?? null,
+          musicbrainz_track_id: track.musicbrainz_track_id ?? null
+        });
+
+        return fullPath;
+      })
+      .filter(Boolean);
+    state.currentPlaylistMeta = {
+      name: playlist.name,
+      author: playlist.author || '',
+      description: playlist.description || ''
+    };
+    state.activeSavedPlaylistId = 'current';
+  }
+  catch (error) {
+    console.error(error);
+  }
+}
+
+function loadActivePlaylistId() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_PLAYLIST_STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    state.activeSavedPlaylistId = raw;
+  }
+  catch (error) {
+    console.error(error);
+  }
+}
+
+function openSavedPlaylistById(playlistId, options = {}) {
+  const { silent = false } = options;
+  const playlist = state.savedPlaylists.find((item) => item.id === playlistId);
+  if (!playlist) {
+    return false;
+  }
+
+  state.playlist = playlist.tracks
+    .map((track) => {
+      const fullPath = getPlaylistTrackFullPath(track);
+      if (!fullPath) {
+        return null;
+      }
+
+      state.fileRegistry[fullPath] = normalizeTrack({
+        path: fullPath,
+        full_path: fullPath,
+        track_id: track.track_id ?? null,
+        drive_id: track.drive_id ?? null,
+        musicbrainz_track_id: track.musicbrainz_track_id ?? null
+      });
+
+      return fullPath;
+    })
+    .filter(Boolean);
+  state.currentPlaylistMeta = {
+    name: playlist.name,
+    author: playlist.author || '',
+    description: playlist.description || ''
+  };
+  state.activeSavedPlaylistId = playlist.id;
+  persistActivePlaylistId();
+  syncCurrentTrackWithPlaylist();
+  renderPlaylist();
+  renderSavedPlaylists();
+
+  if (!silent) {
+    setStatus(`Playlist chargee : ${playlist.name}`);
+  }
+
+  return true;
 }
 
 function syncFilteredSavedPlaylists() {
@@ -636,9 +1549,7 @@ function syncFilteredSavedPlaylists() {
 function renderSavedPlaylists() {
   syncFilteredSavedPlaylists();
 
-  const itemsToRender = state.playlistsExpanded
-    ? state.filteredSavedPlaylists
-    : getSavedPlaylistItems().filter((playlist) => playlist.id === 'current');
+  const itemsToRender = state.filteredSavedPlaylists;
 
   if (!itemsToRender.length) {
     el.playlistsPanel.className = 'playlists-list muted';
@@ -650,15 +1561,14 @@ function renderSavedPlaylists() {
   el.playlistsPanel.className = 'playlists-list';
   el.playlistsPanel.innerHTML = itemsToRender.map((playlist) => {
     const activeClass = state.activeSavedPlaylistId === playlist.id ? ' is-active' : '';
-    const countLabel = `${playlist.tracks.length} fichier(s)`;
-    const detailLabel = playlist.author || playlist.description || countLabel;
+    const countLabel = `${playlist.tracks.length} track(s)`;
 
     return `
       <button class="playlists-item${activeClass}" type="button" data-playlist-id="${escapeHtml(playlist.id)}">
         <span class="playlists-item-main">
           <span class="playlists-item-title">${escapeHtml(playlist.name)}</span>
         </span>
-        <span class="playlists-item-meta">${escapeHtml(detailLabel)}</span>
+        <span class="playlists-item-meta">${escapeHtml(countLabel)}</span>
       </button>`;
   }).join('');
 
@@ -667,43 +1577,13 @@ function renderSavedPlaylists() {
       const playlistId = button.dataset.playlistId;
       if (playlistId === 'current') {
         state.activeSavedPlaylistId = 'current';
+        persistActivePlaylistId();
+        renderPlaylist();
         renderSavedPlaylists();
         return;
       }
 
-      const playlist = state.savedPlaylists.find((item) => item.id === playlistId);
-      if (!playlist) {
-        return;
-      }
-
-      state.playlist = playlist.tracks
-        .map((track) => {
-          const fullPath = getPlaylistTrackFullPath(track);
-          if (!fullPath) {
-            return null;
-          }
-
-          state.fileRegistry[fullPath] = normalizeTrack({
-            path: fullPath,
-            full_path: fullPath,
-            track_id: track.track_id ?? null,
-            drive_id: track.drive_id ?? null,
-            musicbrainz_track_id: track.musicbrainz_track_id ?? null
-          });
-
-          return fullPath;
-        })
-        .filter(Boolean);
-      state.currentPlaylistMeta = {
-        name: playlist.name,
-        author: playlist.author || '',
-        description: playlist.description || ''
-      };
-      state.activeSavedPlaylistId = playlist.id;
-      syncCurrentTrackWithPlaylist();
-      renderPlaylist();
-      renderSavedPlaylists();
-      setStatus(`Playlist chargee : ${playlist.name}`);
+      openSavedPlaylistById(playlistId);
     });
   });
 
@@ -712,7 +1592,7 @@ function renderSavedPlaylists() {
 
 function getActivePlaylistRecord() {
   if (state.activeSavedPlaylistId === 'current') {
-    return getSavedPlaylistItems().find((playlist) => playlist.id === 'current') || null;
+    return getCurrentPlaylistRecord();
   }
 
   return state.savedPlaylists.find((playlist) => playlist.id === state.activeSavedPlaylistId) || null;
@@ -750,22 +1630,50 @@ function savePlaylistEdit() {
     description: normalizePlaylistDescription(el.playlistDescriptionInput.value)
   };
 
+  const conflictingPlaylist = findSavedPlaylistByName(payload.name);
+  if (
+    conflictingPlaylist
+    && conflictingPlaylist.id !== state.activeSavedPlaylistId
+    && !confirmPlaylistOverwrite(payload.name)
+  ) {
+    return;
+  }
+
   state.currentPlaylistMeta = {
     ...state.currentPlaylistMeta,
     ...payload
   };
+  persistCurrentPlaylist();
+  persistActivePlaylistId();
 
   if (state.activeSavedPlaylistId !== 'current') {
-    const index = state.savedPlaylists.findIndex((item) => item.id === state.activeSavedPlaylistId);
-    if (index >= 0) {
-      state.savedPlaylists.splice(index, 1, {
-        ...state.savedPlaylists[index],
-        ...payload
-      });
+    const sourceIndex = state.savedPlaylists.findIndex((item) => item.id === state.activeSavedPlaylistId);
+    if (sourceIndex >= 0) {
+      const targetIndex = conflictingPlaylist && conflictingPlaylist.id !== state.activeSavedPlaylistId
+        ? state.savedPlaylists.findIndex((item) => item.id === conflictingPlaylist.id)
+        : -1;
+      const nextPlaylist = {
+        ...state.savedPlaylists[sourceIndex],
+        ...payload,
+        id: conflictingPlaylist?.id || state.savedPlaylists[sourceIndex].id
+      };
+
+      if (targetIndex >= 0) {
+        state.savedPlaylists.splice(sourceIndex, 1);
+        const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        state.savedPlaylists.splice(adjustedTargetIndex, 1, nextPlaylist);
+      }
+      else {
+        state.savedPlaylists.splice(sourceIndex, 1, nextPlaylist);
+      }
+
+      state.activeSavedPlaylistId = nextPlaylist.id;
       persistSavedPlaylists();
+      persistActivePlaylistId();
     }
   }
 
+  renderCurrentPlaylistHeader();
   renderSavedPlaylists();
   closePlaylistEditModal();
   setStatus(`Playlist mise a jour : ${payload.name}`);
@@ -780,10 +1688,16 @@ function saveNamedPlaylist(name, tracks, options = {}) {
   }
 
   const normalizedName = normalizePlaylistName(name);
+  const excludedId = typeof options.excludedId === 'string' ? options.excludedId : null;
   const existingIndex = state.savedPlaylists.findIndex((playlist) => playlist.name === normalizedName);
   const existing = existingIndex >= 0 ? state.savedPlaylists[existingIndex] : null;
+  if (existing && existing.id !== excludedId && options.confirmOverwrite !== false && !confirmPlaylistOverwrite(normalizedName)) {
+    return null;
+  }
   const payload = normalizePlaylistRecord({
-    id: existing?.id,
+    id: existing?.id && existing.id !== 'current'
+      ? existing.id
+      : (excludedId && excludedId !== 'current' ? excludedId : null),
     name: normalizedName,
     author: options.author ?? existing?.author ?? '',
     description: options.description ?? existing?.description ?? '',
@@ -799,6 +1713,7 @@ function saveNamedPlaylist(name, tracks, options = {}) {
 
   persistSavedPlaylists();
   renderSavedPlaylists();
+  return payload;
 }
 
 function showSnackbar(message) {
@@ -813,6 +1728,80 @@ function showSnackbar(message) {
     el.snackbar.hidden = true;
     snackbarTimer = null;
   }, 2200);
+}
+
+function notifyUser(message, options = {}) {
+  const {
+    isError = false,
+    snackbarMessage = message,
+    showSnack = !isError
+  } = options;
+
+  setStatus(message, isError);
+  if (showSnack) {
+    showSnackbar(snackbarMessage);
+  }
+}
+
+function switchMode(mode) {
+  if (mode !== 'browse' && mode !== 'library' && mode !== 'visualize') {
+    return;
+  }
+
+  state.mode = mode;
+
+  const isBrowseMode = mode === 'browse';
+  const isLibraryMode = mode === 'library';
+  const isVisualizeMode = mode === 'visualize';
+  el.browseModeBtn.setAttribute('aria-pressed', isBrowseMode ? 'true' : 'false');
+  el.libraryModeBtn.setAttribute('aria-pressed', isLibraryMode ? 'true' : 'false');
+  el.visualizeModeBtn.setAttribute('aria-pressed', isVisualizeMode ? 'true' : 'false');
+
+  el.modeDescription.textContent = isBrowseMode
+    ? 'Explore les supports pour lancer les medias immediatement'
+    : (isVisualizeMode
+      ? 'Consulte une page dediee aux futures vues de visualisation'
+      : 'Recherche dans la bibliotheque ou passe en mode explorer pour analyser des dossiers');
+
+  el.browseSidebar.hidden = !isBrowseMode;
+  el.librarySidebar.hidden = !isLibraryMode;
+  el.visualizeSidebar.hidden = !isVisualizeMode;
+  el.browseToolbar.hidden = !isBrowseMode;
+  el.libraryToolbar.hidden = !isLibraryMode;
+  el.visualizeToolbar.hidden = !isVisualizeMode;
+  el.browseContent.hidden = !isBrowseMode;
+  el.libraryContent.hidden = !isLibraryMode;
+  el.visualizeContent.hidden = !isVisualizeMode;
+
+  if (isBrowseMode) {
+    if (!state.drives.length) {
+      initializeBrowseMode();
+    }
+    return;
+  }
+
+  if (isLibraryMode) {
+    initializeLibraryMode();
+  }
+}
+
+function initializeLibraryMode() {
+  renderLibraryWelcomeState();
+}
+
+async function loadLibraryTracks(start = state.libraryStart) {
+  const requestId = ++state.libraryRequestId;
+
+  if (getLibraryQueryParts(state.libraryQuery).length) {
+    await refreshLibraryResults(start);
+    return;
+  }
+
+  if (requestId !== state.libraryRequestId) {
+    return;
+  }
+
+  renderLibraryWelcomeState();
 }
 
 function updateCounters() {
@@ -1372,7 +2361,12 @@ function buildMediaUrl(file) {
 }
 
 function addToPlaylist(path, options = {}) {
-  const { silent = false } = options;
+  const {
+    silent = false,
+    notify = true,
+    statusMessage = null,
+    snackbarMessage = 'Track ajoutee a la playlist'
+  } = options;
   const file = getFileFromRegistry(path);
   if (!file) {
     return -1;
@@ -1380,10 +2374,16 @@ function addToPlaylist(path, options = {}) {
 
   state.playlist.push(path);
   state.activeSavedPlaylistId = 'current';
+  persistCurrentPlaylist();
+  persistActivePlaylistId();
   if (!silent) {
     renderPlaylist();
     renderSavedPlaylists();
-    setStatus(`Ajoute a la playlist : ${file.name}`);
+  }
+  if (notify) {
+    notifyUser(statusMessage || `Ajoute a la playlist : ${file.name}`, {
+      snackbarMessage
+    });
   }
   return state.playlist.length - 1;
 }
@@ -1399,6 +2399,8 @@ function removeFromPlaylist(index) {
     state.currentPlaylistIndex -= 1;
   }
 
+  persistCurrentPlaylist();
+  persistActivePlaylistId();
   renderPlaylist();
   renderSavedPlaylists();
 
@@ -1425,12 +2427,16 @@ function shufflePlaylist() {
   state.playlist = shuffled;
   state.activeSavedPlaylistId = 'current';
   state.currentPlaylistIndex = currentPath ? state.playlist.indexOf(currentPath) : -1;
+  persistCurrentPlaylist();
+  persistActivePlaylistId();
   renderPlaylist();
   renderSavedPlaylists();
   setStatus(`Playlist melangee : ${state.playlist.length} fichier(s)`);
 }
 
 function renderPlaylist() {
+  renderCurrentPlaylistHeader();
+
   if (!state.playlist.length) {
     el.playlistPanel.className = 'playlist-list muted';
     el.playlistPanel.innerHTML = 'Aucun fichier dans la playlist.';
@@ -1490,7 +2496,9 @@ function exportPlaylist() {
   anchor.remove();
   URL.revokeObjectURL(url);
 
-  setStatus(`Playlist exportee : ${state.playlist.length} fichier(s)`);
+  notifyUser(`Playlist exportee : ${state.playlist.length} fichier(s)`, {
+    snackbarMessage: 'Playlist exportee'
+  });
 }
 
 function closePlaylistMenu() {
@@ -1506,7 +2514,7 @@ function togglePlaylistMenu() {
 
 async function copyPlaylistJson() {
   const payload = JSON.stringify({
-    name: state.currentPlaylistMeta.name || 'Playlist courante',
+    name: getCurrentPlaylistDisplayName(),
     author: state.currentPlaylistMeta.author || '',
     description: state.currentPlaylistMeta.description || '',
     tracks: serializeCurrentPlaylistTracks()
@@ -1570,11 +2578,15 @@ function importPlaylistFromText(content) {
     description: playlist.description || ''
   };
   state.activeSavedPlaylistId = 'current';
+  persistCurrentPlaylist();
+  persistActivePlaylistId();
   syncCurrentTrackWithPlaylist();
   renderPlaylist();
   renderSavedPlaylists();
   closePlaylistMenu();
-  setStatus(`Playlist importee : ${state.playlist.length} fichier(s)`);
+  notifyUser(`Playlist importee : ${state.playlist.length} fichier(s)`, {
+    snackbarMessage: 'Playlist importee'
+  });
   return playlist;
 }
 
@@ -1605,6 +2617,22 @@ function playPlaylistIndex(index, autoPlay = true) {
   setStatus(`Lecture : ${file.name}`);
 }
 
+function skipToNextPlaylistTrack() {
+  if (!state.playlist.length) {
+    return;
+  }
+
+  const nextIndex = state.currentPlaylistIndex + 1;
+  if (nextIndex >= 0 && nextIndex < state.playlist.length) {
+    playPlaylistIndex(nextIndex, true);
+    return;
+  }
+
+  if (state.repeatMode) {
+    playPlaylistIndex(0, true);
+  }
+}
+
 function playFile(path) {
   const file = getFileFromRegistry(path);
   if (!file) {
@@ -1627,6 +2655,8 @@ function renderPlayer(autoPlay = false) {
     el.detailsPanel.innerHTML = 'Les informations du fichier selectionne apparaitront ici.';
     el.audioPlayer.removeAttribute('src');
     el.audioPlayer.load();
+    syncVisualizationTrack(null);
+    syncPlayerActions();
     return;
   }
 
@@ -1653,6 +2683,7 @@ function renderPlayer(autoPlay = false) {
 
   const mediaUrl = buildMediaUrl(track);
   if (!mediaUrl) {
+    syncVisualizationTrack(track);
     return;
   }
 
@@ -1663,11 +2694,15 @@ function renderPlayer(autoPlay = false) {
     el.audioPlayer.dataset.path = playbackPath;
   }
 
+  syncVisualizationTrack(track);
+
   if (autoPlay) {
     el.audioPlayer.play().catch(() => {
       setStatus('Lecture bloquee par le navigateur. Clique sur Play.', true);
     });
   }
+
+  syncPlayerActions();
 }
 
 function applyFilter() {
@@ -1744,6 +2779,9 @@ el.browseModeBtn.addEventListener('click', () => {
 el.libraryModeBtn.addEventListener('click', () => {
   switchMode('library');
 });
+el.visualizeModeBtn.addEventListener('click', () => {
+  switchMode('visualize');
+});
 el.libraryRefreshBtn.addEventListener('click', () => {
   loadLibraryTracks(state.libraryStart);
 });
@@ -1760,11 +2798,50 @@ el.librarySearchInput.addEventListener('input', () => {
     librarySearchDebounceTimer = null;
   }, 300);
 });
+el.playerLikeBtn.addEventListener('click', () => {
+  if (!state.currentTrack?.path) {
+    return;
+  }
+
+  if (likedTrackPaths.has(state.currentTrack.path)) {
+    likedTrackPaths.delete(state.currentTrack.path);
+    syncPlayerActions();
+    notifyUser(`Like retire : ${state.currentTrack.title || state.currentTrack.name}`, {
+      snackbarMessage: 'Like retire'
+    });
+    return;
+  }
+
+  likedTrackPaths.add(state.currentTrack.path);
+  syncPlayerActions();
+  notifyUser(`Like ajoute : ${state.currentTrack.title || state.currentTrack.name}`, {
+    snackbarMessage: 'Track aimee'
+  });
+});
+el.playerAddPlaylistBtn.addEventListener('click', () => {
+  if (!state.currentTrack?.path) {
+    return;
+  }
+
+  addToPlaylist(state.currentTrack.path, {
+    statusMessage: `Ajoute a la playlist : ${state.currentTrack.title || state.currentTrack.name}`,
+    snackbarMessage: 'Track ajoutee a la playlist'
+  });
+});
 
 // Playlist mode buttons
+el.playlistPlayBtn.addEventListener('click', () => {
+  if (!state.playlist.length) {
+    setStatus('Aucune piste dans la playlist.', true);
+    return;
+  }
+
+  playPlaylistIndex(0, true);
+});
+el.playlistSkipBtn.addEventListener('click', () => {
+  skipToNextPlaylistTrack();
+});
 el.playlistRandomBtn.addEventListener('click', () => {
-  state.randomMode = !state.randomMode;
-  syncPlaylistModeButtons();
   shufflePlaylist();
 });
 el.playlistRepeatBtn.addEventListener('click', () => {
@@ -1824,19 +2901,15 @@ el.savePlaylistEditBtn.addEventListener('click', () => {
   savePlaylistEdit();
 });
 el.audioPlayer.addEventListener('ended', () => {
-  const nextIndex = state.currentPlaylistIndex + 1;
-  if (nextIndex >= 0 && nextIndex < state.playlist.length) {
-    playPlaylistIndex(nextIndex, true);
-  }
-  else if (state.repeatMode && state.playlist.length) {
-    playPlaylistIndex(0, true);
-  }
+  skipToNextPlaylistTrack();
 });
 el.audioPlayer.addEventListener('play', () => {
+  ensureAudioAnalysisRunning();
   requestWakeLock();
 });
 el.audioPlayer.addEventListener('pause', () => {
   releaseWakeLock();
+  renderEmotionState();
 });
 el.detailsToggleBtn.addEventListener('click', () => {
   state.detailsExpanded = !state.detailsExpanded;
@@ -1873,12 +2946,23 @@ themeMediaQuery.addEventListener('change', () => {
 
 applyTheme();
 loadSavedPlaylists();
+loadCurrentPlaylist();
+loadActivePlaylistId();
+if (state.activeSavedPlaylistId && state.activeSavedPlaylistId !== 'current') {
+  if (!openSavedPlaylistById(state.activeSavedPlaylistId, { silent: true })) {
+    state.activeSavedPlaylistId = 'current';
+    persistActivePlaylistId();
+  }
+}
 syncDetailsVisibility();
 syncPlaylistsVisibility();
 syncContentFilterButtons();
 syncPlaylistModeButtons();
+syncPlayerActions();
+syncVisualizationTrack(state.currentTrack);
 renderSavedPlaylists();
 renderPlaylist();
+switchMode('library');
 loadDrives();
 window.addEventListener('load', startCronPolling, { once: true });
 
