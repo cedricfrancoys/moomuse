@@ -1086,6 +1086,23 @@ p {
   transition: width 0.24s ease, height 0.24s ease, opacity 0.24s ease;
 }
 
+.emotion-wheel-selection-cursor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 72%, white 28%);
+  border: 2px solid rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 10px 22px rgba(0, 0, 0, 0.22);
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  pointer-events: none;
+}
+
 .emotion-wheel-label {
   position: absolute;
   z-index: 2;
@@ -1171,6 +1188,29 @@ p {
 
 .emotion-card-spotlight .emotion-card-title {
   min-width: 72px;
+}
+
+.emotion-wheel-selection-card {
+  margin-top: 14px;
+}
+
+.emotion-wheel-selection-direction {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.emotion-wheel-selection-emotion {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.emotion-wheel-selection-meta {
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .emotion-card-spotlight #visualizeTrackAverageValence {

@@ -192,16 +192,25 @@
                 <span class="emotion-wheel-label emotion-wheel-label-w" aria-hidden="true">Sérénité</span>
                 <span class="emotion-wheel-label emotion-wheel-label-nw" aria-hidden="true">Contentement</span>
                 <div id="emotionWheelCursor" class="emotion-wheel-cursor" aria-hidden="true"></div>
+                <div id="emotionWheelSelectionCursor" class="emotion-wheel-selection-cursor" hidden aria-hidden="true"></div>
               </div>
             </div>
-            <div class="emotion-wheel-side">
+            <div class="emotion-wheel-side" style="display: flex; flex-direction: column; gap: 16px;">
               <div class="emotion-card emotion-card-spotlight">
-              <div class="emotion-card-header">
-                <strong class="emotion-card-title">Valence</strong>
-                <div class="emotion-bipolar-track emotion-card-header-track"><div id="visualizeBarHeaderValence" class="emotion-bipolar-fill is-perceived"></div></div>
-                <span id="visualizeTrackAverageValence" class="muted">0.00</span>
+                <div class="emotion-card-header">
+                  <strong class="emotion-card-title">Valence</strong>
+                  <div class="emotion-bipolar-track emotion-card-header-track"><div id="visualizeBarHeaderValence" class="emotion-bipolar-fill is-perceived"></div></div>
+                  <span id="visualizeTrackAverageValence" class="muted">0.00</span>
+                </div>
+                <p class="emotion-card-description">La couleur émotionnelle globale du morceau. Elle va du sombre et introspectif au lumineux et joyeux, et guide la direction émotionnelle.</p>
               </div>
-              <p class="emotion-card-description">La couleur émotionnelle globale du morceau. Elle va du sombre et introspectif au lumineux et joyeux, et guide la direction émotionnelle.</p>
+              <div class="emotion-card emotion-wheel-selection-card">
+                <div class="emotion-card-header">
+                  <strong class="emotion-card-title">Sélection</strong>
+                  <span id="emotionWheelSelectionDirection" class="muted emotion-wheel-selection-direction">-</span>
+                </div>
+                <div id="emotionWheelSelectionEmotion" class="emotion-wheel-selection-emotion">Clique dans la roue pour identifier une émotion.</div>
+                <div id="emotionWheelSelectionMeta" class="muted emotion-wheel-selection-meta">Aucune sélection.</div>
               </div>
             </div>
           </div>

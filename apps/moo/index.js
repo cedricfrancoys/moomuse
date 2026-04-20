@@ -141,6 +141,10 @@ const el = {
   visualizeElapsed: document.getElementById('visualizeElapsed'),
   emotionWheel: document.getElementById('emotionWheel'),
   emotionWheelCursor: document.getElementById('emotionWheelCursor'),
+  emotionWheelSelectionCursor: document.getElementById('emotionWheelSelectionCursor'),
+  emotionWheelSelectionDirection: document.getElementById('emotionWheelSelectionDirection'),
+  emotionWheelSelectionEmotion: document.getElementById('emotionWheelSelectionEmotion'),
+  emotionWheelSelectionMeta: document.getElementById('emotionWheelSelectionMeta'),
   visualizeTrackAverageEnergy: document.getElementById('visualizeTrackAverageEnergy'),
   visualizeTrackAverageTension: document.getElementById('visualizeTrackAverageTension'),
   visualizeTrackAverageTemperament: document.getElementById('visualizeTrackAverageTemperament'),
@@ -198,6 +202,7 @@ const AUDIO_ANALYSIS_PERCEIVED_GAMMA = 1.5;
 const EMOTION_WHEEL_SMOOTHING_ALPHA = 0.10;
 const EMOTION_WHEEL_POSITION_GAIN = 1.75;
 const EMOTION_WHEEL_MIN_VISIBLE_RADIUS = 0.18;
+const EMOTION_WHEEL_CENTER_THRESHOLD = 0.05;
 const AUDIO_ANALYSIS_SILENCE_RMS_THRESHOLD = 0.008;
 const AUDIO_ANALYSIS_SILENCE_PEAK_THRESHOLD = 0.02;
 const AUDIO_ANALYSIS_SILENCE_SPECTRUM_THRESHOLD = 0.018;
@@ -269,6 +274,79 @@ const audioAnalysis = {
 const emotionWheelState = {
   current: { x: 0, y: 0, r: 0 },
   target: { x: 0, y: 0, r: 0 }
+};
+const emotionWheelSelectionState = {
+  theta: null,
+  radius: null,
+  result: null
+};
+const EMOTION_WHEEL_DIRECTIONS = [
+  'N',
+  'N-NNE',
+  'N-NE',
+  'NNE-NE',
+  'NE',
+  'NE-ENE',
+  'NE-E',
+  'ENE-E',
+  'E',
+  'E-ESE',
+  'E-SE',
+  'ESE-SE',
+  'SE',
+  'SE-SSE',
+  'SE-S',
+  'SSE-S',
+  'S',
+  'S-SSW',
+  'S-SW',
+  'SSW-SW',
+  'SW',
+  'SW-WSW',
+  'SW-W',
+  'WSW-W',
+  'W',
+  'W-WNW',
+  'W-NW',
+  'WNW-NW',
+  'NW',
+  'NW-NNW',
+  'NW-N',
+  'NNW-N'
+];
+const EMOTION_WHEEL_MAP = {
+  N: { 1: 'bien-être', 2: 'plaisir', 3: 'joie' },
+  'N-NNE': { 1: 'reconnaissance', 2: 'gratitude', 3: 'gratitude_profonde' },
+  'N-NE': { 1: 'envie', 2: 'élan', 3: 'élan_vital' },
+  'NNE-NE': { 1: 'intérêt_actif', 2: 'motivation', 3: 'engagement' },
+  NE: { 1: 'intérêt', 2: 'motivation_forte', 3: 'enthousiasme' },
+  'NE-ENE': { 1: 'stimulation_légère', 2: 'stimulation', 3: 'stimulation_intense' },
+  'NE-E': { 1: 'excitation_légère', 2: 'excitation', 3: 'excitation_forte' },
+  'ENE-E': { 1: 'tension_légère', 2: 'tension', 3: 'tension_forte' },
+  E: { 1: 'inquiétude', 2: 'stress', 3: 'anxiété' },
+  'E-ESE': { 1: 'doute', 2: 'inquiétude_forte', 3: 'inquiétude_profonde' },
+  'E-SE': { 1: 'appréhension_légère', 2: 'appréhension', 3: 'appréhension_forte' },
+  'ESE-SE': { 1: 'sensibilité', 2: 'fragilité', 3: 'vulnérabilité' },
+  SE: { 1: 'déception', 2: 'chagrin', 3: 'tristesse' },
+  'SE-SSE': { 1: 'peine', 2: 'chagrin_profond', 3: 'douleur_émotionnelle' },
+  'SE-S': { 1: 'fatigue_émotionnelle', 2: 'abattement', 3: 'abattement_profond' },
+  'SSE-S': { 1: 'désillusion_légère', 2: 'désillusion', 3: 'désillusion_profonde' },
+  S: { 1: 'tristesse_douce', 2: 'nostalgie', 3: 'mélancolie' },
+  'S-SSW': { 1: 'souvenir', 2: 'nostalgie_profonde', 3: 'attachement_passé' },
+  'S-SW': { 1: 'réflexion', 2: 'introspection', 3: 'introspection_profonde' },
+  'SSW-SW': { 1: 'acceptation_légère', 2: 'acceptation', 3: 'lâcher-prise' },
+  SW: { 1: 'relâchement', 2: 'soulagement', 3: 'apaisement' },
+  'SW-WSW': { 1: 'détente', 2: 'relâchement_profond', 3: 'libération' },
+  'SW-W': { 1: 'calme', 2: 'calme_profond', 3: 'stabilité' },
+  'WSW-W': { 1: 'équilibre_léger', 2: 'équilibre', 3: 'équilibre_stable' },
+  W: { 1: 'calme_intérieur', 2: 'paix', 3: 'sérénité' },
+  'W-WNW': { 1: 'satisfaction_légère', 2: 'satisfaction', 3: 'satisfaction_profonde' },
+  'W-NW': { 1: 'contentement_léger', 2: 'contentement', 3: 'contentement_stable' },
+  'WNW-NW': { 1: 'bien-être_stable', 2: 'plénitude', 3: 'plénitude_profonde' },
+  NW: { 1: 'affection', 2: 'attachement', 3: 'contentement' },
+  'NW-NNW': { 1: 'tendresse', 2: 'affection_profonde', 3: 'attachement_fort' },
+  'NW-N': { 1: 'proximité', 2: 'attachement_stable', 3: 'lien_affectif' },
+  'NNW-N': { 1: 'harmonie', 2: 'bien-être', 3: 'alignement' }
 };
 
 function normalizeLibrarySearchQuery(query) {
@@ -926,6 +1004,178 @@ function mapEmotionToWheel(stateVector) {
     y: valence,
     r: clamp((0.6 * energy) + (0.4 * tension), 0, 1)
   };
+}
+
+function normalizeAngleDegrees(theta) {
+  return ((theta % 360) + 360) % 360;
+}
+
+function clampNormalizedRadius(radius) {
+  return clamp(Number.isFinite(radius) ? radius : 0, 0, 1);
+}
+
+function getWheelLevelFromRadius(radius) {
+  const clampedRadius = clampNormalizedRadius(radius);
+  if (clampedRadius < 0.25) {
+    return 1;
+  }
+
+  if (clampedRadius < 0.60) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function getEmotionFromWheelPosition(theta, radius, directions, emotionMap) {
+  if (!Array.isArray(directions) || !directions.length) {
+    throw new Error('Emotion wheel directions must be a non-empty array.');
+  }
+
+  const normalizedTheta = normalizeAngleDegrees(theta);
+  const clampedRadius = clampNormalizedRadius(radius);
+  const segmentSize = 360 / directions.length;
+  const index = Math.round(normalizedTheta / segmentSize) % directions.length;
+  const direction = directions[index];
+
+  if (!direction) {
+    throw new Error(`No direction found at index ${index}.`);
+  }
+
+  if (clampedRadius < EMOTION_WHEEL_CENTER_THRESHOLD) {
+    return {
+      direction: 'center',
+      level: 1,
+      emotion: 'neutral'
+    };
+  }
+
+  const level = getWheelLevelFromRadius(clampedRadius);
+  const directionMap = emotionMap[direction];
+  if (!directionMap) {
+    throw new Error(`Missing emotion mapping for direction "${direction}".`);
+  }
+
+  const emotion = directionMap[String(level)];
+  if (!emotion) {
+    throw new Error(`Missing emotion mapping for direction "${direction}" at level "${level}".`);
+  }
+
+  return { direction, level, emotion };
+}
+
+function getWheelPositionFromEmotion(emotion, directions, emotionMap) {
+  if (!emotion || typeof emotion !== 'string') {
+    throw new Error('Emotion identifier must be a non-empty string.');
+  }
+
+  for (const direction of directions) {
+    const directionMap = emotionMap[direction];
+    if (!directionMap) {
+      continue;
+    }
+
+    for (const levelKey of ['1', '2', '3']) {
+      if (directionMap[levelKey] === emotion) {
+        return {
+          direction,
+          level: Number(levelKey)
+        };
+      }
+    }
+  }
+
+  throw new Error(`Emotion "${emotion}" is not present in the wheel mapping.`);
+}
+
+function getEmotionWheelSelectionGeometry(radius) {
+  const size = el.emotionWheel?.clientWidth || 300;
+  const center = size / 2;
+  const wheelRadius = center - 12;
+  return { center, wheelRadius };
+}
+
+function getEmotionWheelPolarCoordinates(clientX, clientY) {
+  if (!el.emotionWheel) {
+    return null;
+  }
+
+  const rect = el.emotionWheel.getBoundingClientRect();
+  const centerX = rect.left + (rect.width / 2);
+  const centerY = rect.top + (rect.height / 2);
+  const dx = clientX - centerX;
+  const dy = clientY - centerY;
+  const distance = Math.hypot(dx, dy);
+  const radius = clampNormalizedRadius(distance / (Math.min(rect.width, rect.height) / 2));
+  const theta = normalizeAngleDegrees((Math.atan2(dx, -dy) * 180) / Math.PI);
+
+  return { theta, radius };
+}
+
+function renderEmotionWheelSelection() {
+  if (!el.emotionWheelSelectionEmotion || !el.emotionWheelSelectionMeta || !el.emotionWheelSelectionDirection) {
+    return;
+  }
+
+  const selection = emotionWheelSelectionState.result;
+  if (!selection || emotionWheelSelectionState.theta == null || emotionWheelSelectionState.radius == null) {
+    el.emotionWheelSelectionDirection.textContent = '-';
+    el.emotionWheelSelectionEmotion.textContent = 'Clique dans la roue pour identifier une émotion.';
+    el.emotionWheelSelectionMeta.textContent = 'Aucune sélection.';
+    if (el.emotionWheelSelectionCursor) {
+      el.emotionWheelSelectionCursor.hidden = true;
+    }
+    return;
+  }
+
+  el.emotionWheelSelectionDirection.textContent = selection.direction;
+  el.emotionWheelSelectionEmotion.textContent = selection.emotion.replace(/_/g, ' ');
+  el.emotionWheelSelectionMeta.textContent = `Niveau ${selection.level} • θ ${Math.round(emotionWheelSelectionState.theta)}° • r ${emotionWheelSelectionState.radius.toFixed(2)}`;
+
+  if (!el.emotionWheelSelectionCursor || selection.direction === 'center') {
+    if (el.emotionWheelSelectionCursor) {
+      el.emotionWheelSelectionCursor.hidden = selection.direction === 'center';
+    }
+    return;
+  }
+
+  const normalizedTheta = normalizeAngleDegrees(emotionWheelSelectionState.theta);
+  const thetaRadians = (normalizedTheta * Math.PI) / 180;
+  const { center, wheelRadius } = getEmotionWheelSelectionGeometry();
+  const clampedRadius = clampNormalizedRadius(emotionWheelSelectionState.radius);
+  const px = center + (Math.sin(thetaRadians) * clampedRadius * wheelRadius);
+  const py = center - (Math.cos(thetaRadians) * clampedRadius * wheelRadius);
+
+  el.emotionWheelSelectionCursor.hidden = false;
+  el.emotionWheelSelectionCursor.style.left = `${px}px`;
+  el.emotionWheelSelectionCursor.style.top = `${py}px`;
+}
+
+function setEmotionWheelSelection(theta, radius) {
+  emotionWheelSelectionState.theta = normalizeAngleDegrees(theta);
+  emotionWheelSelectionState.radius = clampNormalizedRadius(radius);
+  emotionWheelSelectionState.result = getEmotionFromWheelPosition(
+    emotionWheelSelectionState.theta,
+    emotionWheelSelectionState.radius,
+    EMOTION_WHEEL_DIRECTIONS,
+    EMOTION_WHEEL_MAP
+  );
+  renderEmotionWheelSelection();
+  return emotionWheelSelectionState.result;
+}
+
+function handleEmotionWheelClick(event) {
+  const polarCoordinates = getEmotionWheelPolarCoordinates(event.clientX, event.clientY);
+  if (!polarCoordinates) {
+    return;
+  }
+
+  try {
+    setEmotionWheelSelection(polarCoordinates.theta, polarCoordinates.radius);
+  }
+  catch (error) {
+    console.error(error);
+  }
 }
 
 function renderEmotionWheel(force = false) {
@@ -3850,6 +4100,9 @@ el.secondaryAudioPlayer.addEventListener('seeked', () => {
 el.tertiaryAudioPlayer.addEventListener('seeked', () => {
   handlePlayerSeeked('tertiary');
 });
+if (el.emotionWheel) {
+  el.emotionWheel.addEventListener('click', handleEmotionWheelClick);
+}
 el.detailsToggleBtn.addEventListener('click', () => {
   state.detailsExpanded = !state.detailsExpanded;
   syncDetailsVisibility();
@@ -3866,6 +4119,7 @@ el.playlistEditModal.addEventListener('click', (event) => {
 });
 window.addEventListener('resize', () => {
   updateNowPlayingTitle(state.currentTrack ? state.currentTrack.name : 'Aucun media selectionne');
+  renderEmotionWheelSelection();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -3882,6 +4136,16 @@ themeMediaQuery.addEventListener('change', () => {
     applyTheme();
   }
 });
+
+window.mooEmotionWheel = {
+  directions: EMOTION_WHEEL_DIRECTIONS,
+  emotionMap: EMOTION_WHEEL_MAP,
+  normalizeAngleDegrees,
+  clampNormalizedRadius,
+  getWheelLevelFromRadius,
+  getEmotionFromWheelPosition,
+  getWheelPositionFromEmotion
+};
 
 applyTheme();
 loadSavedPlaylists();
