@@ -17,6 +17,16 @@ const state = {
   fileRegistry: {},
   currentTrack: null,
   currentPlaylistIndex: -1,
+  activePlayerKey: 'primary',
+  queuedPlayerKey: 'secondary',
+  bufferPlayerKey: 'tertiary',
+  fadingPlayerKey: null,
+  queuedTrack: null,
+  queuedPlaylistIndex: -1,
+  bufferTrack: null,
+  bufferPlaylistIndex: -1,
+  crossfadeInProgress: false,
+  crossfadePlayerStarted: false,
   activeSavedPlaylistId: 'current',
   randomMode: false,
   repeatMode: false,
@@ -86,6 +96,8 @@ const el = {
   playlistAuthorInput: document.getElementById('playlistAuthorInput'),
   playlistDescriptionInput: document.getElementById('playlistDescriptionInput'),
   audioPlayer: document.getElementById('audioPlayer'),
+  secondaryAudioPlayer: document.getElementById('secondaryAudioPlayer'),
+  tertiaryAudioPlayer: document.getElementById('tertiaryAudioPlayer'),
   playerLikeBtn: document.getElementById('playerLikeBtn'),
   playerAddPlaylistBtn: document.getElementById('playerAddPlaylistBtn'),
   snackbar: document.getElementById('snackbar'),
@@ -114,6 +126,7 @@ const el = {
   browseContent: document.getElementById('browseContent'),
   libraryContent: document.getElementById('libraryContent'),
   visualizeContent: document.getElementById('visualizeContent'),
+  visualizationGrid: document.getElementById('visualizationGrid'),
   // Library elements
   librarySearchInput: document.getElementById('librarySearchInput'),
   libraryRefreshBtn: document.getElementById('libraryRefreshBtn'),
@@ -123,33 +136,56 @@ const el = {
   librarySubtitle: document.getElementById('librarySubtitle'),
   visualizeTrackInfo: document.getElementById('visualizeTrackInfo'),
   visualizeConfidence: document.getElementById('visualizeConfidence'),
+  visualizeCardsToggleBtn: document.getElementById('visualizeCardsToggleBtn'),
+  visualizeCardsToggleIcon: document.getElementById('visualizeCardsToggleIcon'),
   visualizeElapsed: document.getElementById('visualizeElapsed'),
-  visualizeInstantEnergy: document.getElementById('visualizeInstantEnergy'),
-  visualizeInstantTension: document.getElementById('visualizeInstantTension'),
-  visualizeInstantTemperament: document.getElementById('visualizeInstantTemperament'),
-  visualizeInstantStability: document.getElementById('visualizeInstantStability'),
+  emotionWheel: document.getElementById('emotionWheel'),
+  emotionWheelCursor: document.getElementById('emotionWheelCursor'),
+  visualizeTrackAverageEnergy: document.getElementById('visualizeTrackAverageEnergy'),
+  visualizeTrackAverageTension: document.getElementById('visualizeTrackAverageTension'),
+  visualizeTrackAverageTemperament: document.getElementById('visualizeTrackAverageTemperament'),
+  visualizeTrackAverageStability: document.getElementById('visualizeTrackAverageStability'),
+  visualizeTrackAverageValence: document.getElementById('visualizeTrackAverageValence'),
   visualizeBarInstantEnergy: document.getElementById('visualizeBarInstantEnergy'),
   visualizeBarShortEnergy: document.getElementById('visualizeBarShortEnergy'),
   visualizeBarLongEnergy: document.getElementById('visualizeBarLongEnergy'),
+  visualizeBarTrackEnergy: document.getElementById('visualizeBarTrackEnergy'),
+  visualizeBarPerceivedEnergy: document.getElementById('visualizeBarPerceivedEnergy'),
   visualizeBarInstantTension: document.getElementById('visualizeBarInstantTension'),
   visualizeBarShortTension: document.getElementById('visualizeBarShortTension'),
   visualizeBarLongTension: document.getElementById('visualizeBarLongTension'),
+  visualizeBarTrackTension: document.getElementById('visualizeBarTrackTension'),
+  visualizeBarPerceivedTension: document.getElementById('visualizeBarPerceivedTension'),
   visualizeBarInstantTemperament: document.getElementById('visualizeBarInstantTemperament'),
   visualizeBarShortTemperament: document.getElementById('visualizeBarShortTemperament'),
   visualizeBarLongTemperament: document.getElementById('visualizeBarLongTemperament'),
+  visualizeBarTrackTemperament: document.getElementById('visualizeBarTrackTemperament'),
+  visualizeBarPerceivedTemperament: document.getElementById('visualizeBarPerceivedTemperament'),
   visualizeBarInstantStability: document.getElementById('visualizeBarInstantStability'),
   visualizeBarShortStability: document.getElementById('visualizeBarShortStability'),
-  visualizeBarLongStability: document.getElementById('visualizeBarLongStability')
+  visualizeBarLongStability: document.getElementById('visualizeBarLongStability'),
+  visualizeBarTrackStability: document.getElementById('visualizeBarTrackStability'),
+  visualizeBarPerceivedStability: document.getElementById('visualizeBarPerceivedStability'),
+  visualizeBarInstantValence: document.getElementById('visualizeBarInstantValence'),
+  visualizeBarShortValence: document.getElementById('visualizeBarShortValence'),
+  visualizeBarLongValence: document.getElementById('visualizeBarLongValence'),
+  visualizeBarHeaderValence: document.getElementById('visualizeBarHeaderValence'),
+  visualizeBarTrackValence: document.getElementById('visualizeBarTrackValence'),
+  visualizeBarPerceivedValence: document.getElementById('visualizeBarPerceivedValence')
 };
 
 let snackbarTimer = null;
 let librarySearchDebounceTimer = null;
 const likedTrackPaths = new Set();
 const themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const AUDIO_PLAYER_KEYS = ['primary', 'secondary', 'tertiary'];
 const PLAYLIST_STORAGE_KEY = 'moo_saved_playlists';
 const CURRENT_PLAYLIST_STORAGE_KEY = 'moo_current_playlist';
 const ACTIVE_PLAYLIST_STORAGE_KEY = 'moo_active_playlist';
 const CRON_INTERVAL_MS = 60000;
+const CROSSFADE_TRIGGER_SECONDS = 10;
+const CROSSFADE_DURATION_MS = 10000;
+const CROSSFADE_MIN_DURATION_MS = 1200;
 const AUDIO_ANALYSIS_INTERVAL_MS = 40;
 const AUDIO_ANALYSIS_UI_INTERVAL_MS = 320;
 const AUDIO_ANALYSIS_SHORT_ALPHA = 0.08;
@@ -157,6 +193,11 @@ const AUDIO_ANALYSIS_LONG_ALPHA = 0.01;
 const AUDIO_ANALYSIS_LONG_ALPHA_FAST = 0.035;
 const AUDIO_ANALYSIS_DRIFT_THRESHOLD = 0.18;
 const AUDIO_ANALYSIS_DRIFT_UPDATES = 6;
+const AUDIO_ANALYSIS_END_WINDOW_MS = 10000;
+const AUDIO_ANALYSIS_PERCEIVED_GAMMA = 1.5;
+const EMOTION_WHEEL_SMOOTHING_ALPHA = 0.10;
+const EMOTION_WHEEL_POSITION_GAIN = 1.75;
+const EMOTION_WHEEL_MIN_VISIBLE_RADIUS = 0.18;
 const AUDIO_ANALYSIS_SILENCE_RMS_THRESHOLD = 0.008;
 const AUDIO_ANALYSIS_SILENCE_PEAK_THRESHOLD = 0.02;
 const AUDIO_ANALYSIS_SILENCE_SPECTRUM_THRESHOLD = 0.018;
@@ -168,6 +209,7 @@ const AUDIO_FEATURE_BOUNDS = {
   peak: { min: 0.05, max: 1.0 },
   zeroCrossingRate: { min: 0.01, max: 0.3 },
   spectralCentroidHz: { min: 700, max: 4200 },
+  spectralSpreadHz: { min: 350, max: 3200 },
   spectralFlux: { min: 0.002, max: 0.08 },
   lowBandRatio: { min: 0.05, max: 0.75 },
   midBandRatio: { min: 0.05, max: 0.8 },
@@ -179,17 +221,22 @@ const AUDIO_FEATURE_BOUNDS = {
   fluxVariance: { min: 0.002, max: 0.22 },
   rhythmicDensity: { min: 0.2, max: 4.5 },
   ioiVariance: { min: 0.002, max: 0.08 },
-  temporalCompression: { min: 0.15, max: 0.95 }
+  temporalCompression: { min: 0.15, max: 0.95 },
+  patternDrift: { min: 0.002, max: 0.12 }
 };
+const EMOTION_DIMENSIONS = ['energy', 'tension', 'temperament', 'stability', 'valence'];
+const BIPOLAR_EMOTION_DIMENSIONS = ['temperament', 'valence'];
+const UNIPOLAR_EMOTION_DIMENSIONS = ['energy', 'tension', 'stability'];
 let wakeLock = null;
 let wakeLockEnabled = 'wakeLock' in navigator;
 let audioAnalysisFrameId = 0;
 let audioAnalysisLastSampleAt = 0;
 let audioAnalysisLastUiUpdateAt = 0;
+let crossfadeAnimationFrameId = 0;
 
 const audioAnalysis = {
   context: null,
-  source: null,
+  sources: {},
   analyser: null,
   timeData: null,
   freqData: null,
@@ -202,16 +249,26 @@ const audioAnalysis = {
   dynamicHistory: [],
   activeFrameHistory: [],
   states: createEmptyEmotionState(),
+  trackAxisHistory: createEmotionAxisHistory(),
+  trackTimeline: [],
+  trackProfile: createTrackEmotionProfile(),
+  trackProfileDirty: false,
   confidence: 0,
   elapsedMs: 0,
+  trackAverageSamples: 0,
   driftCounters: {
     energy: 0,
     tension: 0,
     temperament: 0,
-    stability: 0
+    stability: 0,
+    valence: 0
   },
   silenceFrames: 0,
   activeTrackPath: ''
+};
+const emotionWheelState = {
+  current: { x: 0, y: 0, r: 0 },
+  target: { x: 0, y: 0, r: 0 }
 };
 
 function normalizeLibrarySearchQuery(query) {
@@ -244,6 +301,224 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function getAudioPlayerByKey(key) {
+  if (key === 'secondary') {
+    return el.secondaryAudioPlayer;
+  }
+
+  if (key === 'tertiary') {
+    return el.tertiaryAudioPlayer;
+  }
+
+  return el.audioPlayer;
+}
+
+function getActiveAudioPlayer() {
+  return getAudioPlayerByKey(state.activePlayerKey);
+}
+
+function getQueuedAudioPlayer() {
+  return getAudioPlayerByKey(state.queuedPlayerKey);
+}
+
+function getBufferAudioPlayer() {
+  return getAudioPlayerByKey(state.bufferPlayerKey);
+}
+
+function getFadingAudioPlayer() {
+  return state.fadingPlayerKey ? getAudioPlayerByKey(state.fadingPlayerKey) : null;
+}
+
+function isPlayerPlaying(player) {
+  return Boolean(player && !player.paused && !player.ended && player.currentSrc);
+}
+
+function hasAnyPlayingAudio() {
+  return AUDIO_PLAYER_KEYS.some((key) => isPlayerPlaying(getAudioPlayerByKey(key)));
+}
+
+function syncAudioPlayerVisibility() {
+  const activePlayer = getActiveAudioPlayer();
+  AUDIO_PLAYER_KEYS.forEach((key) => {
+    const player = getAudioPlayerByKey(key);
+    const isActivePlayer = key === state.activePlayerKey;
+    player.hidden = false;
+    player.classList.toggle('is-active', isActivePlayer);
+    player.setAttribute('aria-hidden', isActivePlayer ? 'false' : 'true');
+  });
+}
+
+function clearAudioPlayer(player) {
+  if (!player) {
+    return;
+  }
+
+  player.pause();
+  player.volume = 1;
+  delete player.dataset.path;
+  delete player.dataset.playlistIndex;
+  player.removeAttribute('src');
+  player.load();
+}
+
+function stopCrossfadeAnimation() {
+  if (!crossfadeAnimationFrameId) {
+    return;
+  }
+
+  cancelAnimationFrame(crossfadeAnimationFrameId);
+  crossfadeAnimationFrameId = 0;
+}
+
+function cancelCrossfade() {
+  stopCrossfadeAnimation();
+  state.crossfadeInProgress = false;
+  state.crossfadePlayerStarted = false;
+  const fadingPlayer = getFadingAudioPlayer();
+  if (fadingPlayer) {
+    clearAudioPlayer(fadingPlayer);
+  }
+  state.fadingPlayerKey = null;
+  getActiveAudioPlayer().volume = 1;
+  getQueuedAudioPlayer().volume = 1;
+  getBufferAudioPlayer().volume = 1;
+  syncAudioPlayerVisibility();
+}
+
+function resetAudioAnalysisContext() {
+  if (audioAnalysis.context) {
+    audioAnalysis.context.close().catch((error) => {
+      console.error(error);
+    });
+  }
+
+  audioAnalysis.context = null;
+  audioAnalysis.sources = {};
+  audioAnalysis.analyser = null;
+  audioAnalysis.timeData = null;
+  audioAnalysis.freqData = null;
+}
+
+function getNextPlaylistIndex() {
+  return getPlaylistIndexAtOffset(1);
+}
+
+function getPlaylistIndexAtOffset(offset) {
+  if (!state.playlist.length || state.currentPlaylistIndex < 0) {
+    return -1;
+  }
+
+  const rawIndex = state.currentPlaylistIndex + offset;
+  if (rawIndex >= 0 && rawIndex < state.playlist.length) {
+    return rawIndex;
+  }
+
+  if (!state.repeatMode) {
+    return -1;
+  }
+
+  const length = state.playlist.length;
+  return ((rawIndex % length) + length) % length;
+}
+
+function loadTrackIntoPlayer(player, track, playlistIndex) {
+  if (!player || !track) {
+    clearAudioPlayer(player);
+    return false;
+  }
+
+  const mediaUrl = buildMediaUrl(track);
+  const playbackPath = getTrackPlaybackPath(track);
+  if (!mediaUrl || !playbackPath) {
+    clearAudioPlayer(player);
+    return false;
+  }
+
+  if (player.dataset.path !== playbackPath) {
+    player.src = mediaUrl;
+    player.dataset.path = playbackPath;
+    player.dataset.playlistIndex = String(playlistIndex);
+    player.load();
+  }
+  else {
+    try {
+      player.currentTime = 0;
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+
+  player.volume = 0;
+  return true;
+}
+
+function rebuildUpcomingPlayers() {
+  const inactiveKeys = AUDIO_PLAYER_KEYS.filter((key) => key !== state.activePlayerKey);
+  const [nextQueuedKey, nextBufferKey] = inactiveKeys;
+
+  state.crossfadeInProgress = false;
+  state.crossfadePlayerStarted = false;
+  state.fadingPlayerKey = null;
+  state.queuedPlayerKey = nextQueuedKey;
+  state.bufferPlayerKey = nextBufferKey;
+  state.queuedTrack = null;
+  state.queuedPlaylistIndex = -1;
+  state.bufferTrack = null;
+  state.bufferPlaylistIndex = -1;
+
+  inactiveKeys.forEach((key) => {
+    clearAudioPlayer(getAudioPlayerByKey(key));
+  });
+
+  const activePlayer = getActiveAudioPlayer();
+  activePlayer.volume = 1;
+  syncAudioPlayerVisibility();
+  prepareUpcomingTracks();
+}
+
+function prepareUpcomingTracks() {
+  if (state.crossfadeInProgress || !state.currentTrack?.path) {
+    return;
+  }
+
+  const queuedIndex = getPlaylistIndexAtOffset(1);
+  if (queuedIndex >= 0) {
+    const queuedTrack = getFileFromRegistry(state.playlist[queuedIndex]);
+    if (queuedTrack && loadTrackIntoPlayer(getQueuedAudioPlayer(), queuedTrack, queuedIndex)) {
+      state.queuedTrack = queuedTrack;
+      state.queuedPlaylistIndex = queuedIndex;
+    }
+    else {
+      state.queuedTrack = null;
+      state.queuedPlaylistIndex = -1;
+    }
+  }
+  else {
+    state.queuedTrack = null;
+    state.queuedPlaylistIndex = -1;
+    clearAudioPlayer(getQueuedAudioPlayer());
+  }
+
+  const bufferIndex = getPlaylistIndexAtOffset(2);
+  if (bufferIndex >= 0) {
+    const bufferTrack = getFileFromRegistry(state.playlist[bufferIndex]);
+    if (bufferTrack && loadTrackIntoPlayer(getBufferAudioPlayer(), bufferTrack, bufferIndex)) {
+      state.bufferTrack = bufferTrack;
+      state.bufferPlaylistIndex = bufferIndex;
+    }
+    else {
+      state.bufferTrack = null;
+      state.bufferPlaylistIndex = -1;
+    }
+  }
+  else {
+    state.bufferTrack = null;
+    state.bufferPlaylistIndex = -1;
+    clearAudioPlayer(getBufferAudioPlayer());
+  }
+}
+
 function normalize(value, min, max) {
   if (max <= min) {
     return 0;
@@ -257,7 +532,8 @@ function createEmotionVector() {
     energy: 0,
     tension: 0,
     temperament: 0,
-    stability: 0
+    stability: 0,
+    valence: 0
   };
 }
 
@@ -265,7 +541,37 @@ function createEmptyEmotionState() {
   return {
     instant: createEmotionVector(),
     shortTerm: createEmotionVector(),
-    longTerm: createEmotionVector()
+    longTerm: createEmotionVector(),
+    trackAverage: createEmotionVector(),
+    trackPerceived: createEmotionVector()
+  };
+}
+
+function createEmotionAxisHistory() {
+  return EMOTION_DIMENSIONS.reduce((history, dimension) => {
+    history[dimension] = [];
+    return history;
+  }, {});
+}
+
+function createTrackEmotionProfile() {
+  return {
+    average: createEmotionVector(),
+    perceived: createEmotionVector(),
+    peaks: {
+      energy: 0,
+      tension: 0,
+      stability: 0,
+      temperamentPositive: 0,
+      temperamentNegative: 0,
+      valencePositive: 0,
+      valenceNegative: 0
+    },
+    percentiles: {
+      p80: createEmotionVector(),
+      p90: createEmotionVector()
+    },
+    endWindow: createEmotionVector()
   };
 }
 
@@ -275,6 +581,158 @@ function averageValues(values) {
   }
 
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function averageAbsoluteDelta(values) {
+  if (!Array.isArray(values) || values.length < 2) {
+    return 0;
+  }
+
+  let totalDelta = 0;
+  for (let index = 1; index < values.length; index += 1) {
+    totalDelta += Math.abs(values[index] - values[index - 1]);
+  }
+
+  return totalDelta / (values.length - 1);
+}
+
+function computePercentile(values, percentile) {
+  if (!Array.isArray(values) || !values.length) {
+    return 0;
+  }
+
+  const sortedValues = [...values].sort((left, right) => left - right);
+  const scaledIndex = clamp(percentile, 0, 1) * (sortedValues.length - 1);
+  const lowerIndex = Math.floor(scaledIndex);
+  const upperIndex = Math.ceil(scaledIndex);
+  const mix = scaledIndex - lowerIndex;
+
+  if (lowerIndex === upperIndex) {
+    return sortedValues[lowerIndex];
+  }
+
+  return sortedValues[lowerIndex] + ((sortedValues[upperIndex] - sortedValues[lowerIndex]) * mix);
+}
+
+function computeBiasedMean(values, isBipolar = false, gamma = AUDIO_ANALYSIS_PERCEIVED_GAMMA) {
+  if (!Array.isArray(values) || !values.length) {
+    return 0;
+  }
+
+  const transformedValues = values.map((value) => {
+    if (!isBipolar) {
+      return value ** gamma;
+    }
+
+    const magnitude = Math.abs(value) ** gamma;
+    return Math.sign(value) * magnitude;
+  });
+
+  return averageValues(transformedValues);
+}
+
+function computeSignedPercentile(values, percentile) {
+  if (!Array.isArray(values) || !values.length) {
+    return 0;
+  }
+
+  const positiveValues = values.filter((value) => value > 0);
+  const negativeMagnitudes = values.filter((value) => value < 0).map((value) => Math.abs(value));
+  const positivePercentile = computePercentile(positiveValues, percentile);
+  const negativePercentile = computePercentile(negativeMagnitudes, percentile);
+
+  return clamp(positivePercentile - negativePercentile, -1, 1);
+}
+
+function recordTrackEmotionSample(vector, timeMs) {
+  EMOTION_DIMENSIONS.forEach((dimension) => {
+    audioAnalysis.trackAxisHistory[dimension].push(vector[dimension]);
+  });
+
+  audioAnalysis.trackTimeline.push({
+    timeMs,
+    ...vector
+  });
+  audioAnalysis.trackProfileDirty = true;
+}
+
+function computeEndWindowVector() {
+  if (!audioAnalysis.trackTimeline.length) {
+    return createEmotionVector();
+  }
+
+  const lastTimeMs = audioAnalysis.trackTimeline[audioAnalysis.trackTimeline.length - 1].timeMs;
+  const windowStartMs = Math.max(0, lastTimeMs - AUDIO_ANALYSIS_END_WINDOW_MS);
+  const endSamples = audioAnalysis.trackTimeline.filter((sample) => sample.timeMs >= windowStartMs);
+
+  if (!endSamples.length) {
+    return createEmotionVector();
+  }
+
+  return EMOTION_DIMENSIONS.reduce((vector, dimension) => {
+    vector[dimension] = averageValues(endSamples.map((sample) => sample[dimension]));
+    return vector;
+  }, createEmotionVector());
+}
+
+function computeTrackEmotionProfile() {
+  const profile = createTrackEmotionProfile();
+
+  if (!audioAnalysis.trackTimeline.length) {
+    return profile;
+  }
+
+  profile.average = { ...audioAnalysis.states.trackAverage };
+  profile.endWindow = computeEndWindowVector();
+
+  UNIPOLAR_EMOTION_DIMENSIONS.forEach((dimension) => {
+    const values = audioAnalysis.trackAxisHistory[dimension];
+    profile.peaks[dimension] = values.length ? Math.max(...values) : 0;
+    profile.percentiles.p80[dimension] = computePercentile(values, 0.8);
+    profile.percentiles.p90[dimension] = computePercentile(values, 0.9);
+    const biasedMean = computeBiasedMean(values, false);
+    profile.perceived[dimension] = clamp(
+      (0.35 * biasedMean)
+      + (0.40 * profile.percentiles.p90[dimension])
+      + (0.25 * profile.endWindow[dimension]),
+      0,
+      1
+    );
+  });
+
+  BIPOLAR_EMOTION_DIMENSIONS.forEach((dimension) => {
+    const values = audioAnalysis.trackAxisHistory[dimension];
+    const positiveValues = values.filter((value) => value > 0);
+    const negativeMagnitudes = values.filter((value) => value < 0).map((value) => Math.abs(value));
+    const positivePeak = positiveValues.length ? Math.max(...positiveValues) : 0;
+    const negativePeak = negativeMagnitudes.length ? Math.max(...negativeMagnitudes) : 0;
+    const signedP80 = computeSignedPercentile(values, 0.8);
+    const signedP90 = computeSignedPercentile(values, 0.9);
+    const biasedMean = computeBiasedMean(values, true);
+
+    profile.percentiles.p80[dimension] = signedP80;
+    profile.percentiles.p90[dimension] = signedP90;
+    profile.perceived[dimension] = clamp(
+      (0.40 * biasedMean)
+      + (0.35 * signedP90)
+      + (0.25 * profile.endWindow[dimension]),
+      -1,
+      1
+    );
+
+    if (dimension === 'temperament') {
+      profile.peaks.temperamentPositive = positivePeak;
+      profile.peaks.temperamentNegative = negativePeak ? -negativePeak : 0;
+    }
+    else if (dimension === 'valence') {
+      profile.peaks.valencePositive = positivePeak;
+      profile.peaks.valenceNegative = negativePeak ? -negativePeak : 0;
+    }
+  });
+
+  profile.perceived.valence = computeDisplayedValence(profile.perceived);
+
+  return profile;
 }
 
 function pushLimited(list, value, limit) {
@@ -298,7 +756,8 @@ function smoothEmotionVector(nextVector, prevVector, alpha) {
     energy: prevVector.energy + ((nextVector.energy - prevVector.energy) * alpha),
     tension: prevVector.tension + ((nextVector.tension - prevVector.tension) * alpha),
     temperament: prevVector.temperament + ((nextVector.temperament - prevVector.temperament) * alpha),
-    stability: prevVector.stability + ((nextVector.stability - prevVector.stability) * alpha)
+    stability: prevVector.stability + ((nextVector.stability - prevVector.stability) * alpha),
+    valence: prevVector.valence + ((nextVector.valence - prevVector.valence) * alpha)
   };
 }
 
@@ -312,13 +771,19 @@ function resetAudioAnalysisState() {
   audioAnalysis.activeFrameHistory = [];
   audioAnalysis.prevFreqData = null;
   audioAnalysis.states = createEmptyEmotionState();
+  audioAnalysis.trackAxisHistory = createEmotionAxisHistory();
+  audioAnalysis.trackTimeline = [];
+  audioAnalysis.trackProfile = createTrackEmotionProfile();
+  audioAnalysis.trackProfileDirty = false;
   audioAnalysis.confidence = 0;
   audioAnalysis.elapsedMs = 0;
+  audioAnalysis.trackAverageSamples = 0;
   audioAnalysis.driftCounters = {
     energy: 0,
     tension: 0,
     temperament: 0,
-    stability: 0
+    stability: 0,
+    valence: 0
   };
   audioAnalysis.silenceFrames = 0;
   audioAnalysisLastSampleAt = 0;
@@ -336,30 +801,51 @@ function resetVisualizationUi() {
   el.visualizeTrackInfo.innerHTML = 'Des infos seront visibles en cours de lecture.';
   el.visualizeConfidence.textContent = 'Confiance 0%';
   el.visualizeElapsed.textContent = '0 ms analyses';
-  el.visualizeInstantEnergy.textContent = '0.00';
-  el.visualizeInstantTension.textContent = '0.00';
-  el.visualizeInstantTemperament.textContent = '0.00';
-  el.visualizeInstantStability.textContent = '0.00';
+  el.visualizeTrackAverageEnergy.textContent = '0.00';
+  el.visualizeTrackAverageTension.textContent = '0.00';
+  el.visualizeTrackAverageTemperament.textContent = '0.00';
+  el.visualizeTrackAverageStability.textContent = '0.00';
+  el.visualizeTrackAverageValence.textContent = '0.00';
 
   [
     el.visualizeBarInstantEnergy,
     el.visualizeBarShortEnergy,
     el.visualizeBarLongEnergy,
+    el.visualizeBarTrackEnergy,
+    el.visualizeBarPerceivedEnergy,
     el.visualizeBarInstantTension,
     el.visualizeBarShortTension,
     el.visualizeBarLongTension,
+    el.visualizeBarTrackTension,
+    el.visualizeBarPerceivedTension,
     el.visualizeBarInstantStability,
     el.visualizeBarShortStability,
-    el.visualizeBarLongStability
-  ].forEach((bar) => {
+    el.visualizeBarLongStability,
+    el.visualizeBarTrackStability,
+    el.visualizeBarPerceivedStability
+  ].filter(Boolean).forEach((bar) => {
+    bar.style.width = '0%';
+  });
+
+  [
+    el.visualizeBarHeaderValence,
+    el.visualizeBarInstantValence,
+    el.visualizeBarShortValence,
+    el.visualizeBarLongValence,
+    el.visualizeBarTrackValence,
+    el.visualizeBarPerceivedValence
+  ].filter(Boolean).forEach((bar) => {
+    bar.style.left = '50%';
     bar.style.width = '0%';
   });
 
   [
     el.visualizeBarInstantTemperament,
     el.visualizeBarShortTemperament,
-    el.visualizeBarLongTemperament
-  ].forEach((bar) => {
+    el.visualizeBarLongTemperament,
+    el.visualizeBarTrackTemperament,
+    el.visualizeBarPerceivedTemperament
+  ].filter(Boolean).forEach((bar) => {
     bar.style.left = '50%';
     bar.style.width = '0%';
   });
@@ -367,6 +853,10 @@ function resetVisualizationUi() {
   document.querySelectorAll('.emotion-row-value').forEach((node) => {
     node.textContent = '0.00';
   });
+
+  emotionWheelState.current = { x: 0, y: 0, r: 0 };
+  emotionWheelState.target = { x: 0, y: 0, r: 0 };
+  renderEmotionWheel(true);
 }
 
 function renderVisualizationTrackInfo(track) {
@@ -386,10 +876,18 @@ function renderVisualizationTrackInfo(track) {
 }
 
 function setEmotionBar(bar, value) {
+  if (!bar) {
+    return;
+  }
+
   bar.style.width = `${clamp(value, 0, 1) * 100}%`;
 }
 
 function setBipolarEmotionBar(bar, value) {
+  if (!bar) {
+    return;
+  }
+
   const normalized = clamp(value, -1, 1);
   if (normalized >= 0) {
     bar.style.left = '50%';
@@ -401,38 +899,218 @@ function setBipolarEmotionBar(bar, value) {
   bar.style.width = `${Math.abs(normalized) * 50}%`;
 }
 
+function computeDisplayedValence(perceivedAxes) {
+  const energyComponent = ((perceivedAxes.energy || 0) * 2) - 1;
+  const stabilityComponent = ((perceivedAxes.stability || 0) * 2) - 1;
+  const tensionComponent = 1 - ((perceivedAxes.tension || 0) * 2);
+  const temperamentComponent = perceivedAxes.temperament || 0;
+
+  return clamp(
+    (0.40 * temperamentComponent)
+    + (0.20 * tensionComponent)
+    + (0.20 * stabilityComponent)
+    + (0.20 * energyComponent),
+    -1,
+    1
+  );
+}
+
+function mapEmotionToWheel(stateVector) {
+  const energy = clamp(stateVector?.energy ?? 0, 0, 1);
+  const tension = clamp(stateVector?.tension ?? 0, 0, 1);
+  const temperament = clamp(stateVector?.temperament ?? 0, -1, 1);
+  const valence = clamp(stateVector?.valence ?? 0, -1, 1);
+
+  return {
+    x: clamp(tension * temperament, -1, 1),
+    y: valence,
+    r: clamp((0.6 * energy) + (0.4 * tension), 0, 1)
+  };
+}
+
+function renderEmotionWheel(force = false) {
+  if (!el.emotionWheel || !el.emotionWheelCursor) {
+    return;
+  }
+
+  const baseState = audioAnalysis.states.trackPerceived || createEmotionVector();
+  const mapped = mapEmotionToWheel(baseState);
+  const stability = clamp(baseState.stability ?? 0, 0, 1);
+  const stabilityBlend = 0.35 + (0.65 * stability);
+
+  emotionWheelState.target.x = mapped.x;
+  emotionWheelState.target.y = mapped.y;
+  emotionWheelState.target.r = mapped.r;
+
+  if (force) {
+    emotionWheelState.current.x = emotionWheelState.target.x;
+    emotionWheelState.current.y = emotionWheelState.target.y;
+    emotionWheelState.current.r = emotionWheelState.target.r;
+  }
+  else {
+    emotionWheelState.current.x += ((emotionWheelState.target.x - emotionWheelState.current.x) * EMOTION_WHEEL_SMOOTHING_ALPHA * stabilityBlend);
+    emotionWheelState.current.y += ((emotionWheelState.target.y - emotionWheelState.current.y) * EMOTION_WHEEL_SMOOTHING_ALPHA * stabilityBlend);
+    emotionWheelState.current.r += ((emotionWheelState.target.r - emotionWheelState.current.r) * EMOTION_WHEEL_SMOOTHING_ALPHA);
+  }
+
+  const size = el.emotionWheel.clientWidth || 300;
+  const center = size / 2;
+  const wheelRadius = center - 12;
+  const projectedRadius = clamp(
+    EMOTION_WHEEL_MIN_VISIBLE_RADIUS
+      + (emotionWheelState.current.r * (1 - EMOTION_WHEEL_MIN_VISIBLE_RADIUS)),
+    0,
+    1
+  );
+  const projectedX = clamp(
+    emotionWheelState.current.x * projectedRadius * EMOTION_WHEEL_POSITION_GAIN,
+    -1,
+    1
+  );
+  const projectedY = clamp(
+    emotionWheelState.current.y * projectedRadius * EMOTION_WHEEL_POSITION_GAIN,
+    -1,
+    1
+  );
+  const px = center + (projectedX * wheelRadius);
+  const py = center - (projectedY * wheelRadius);
+  const cursorSize = 12 + (emotionWheelState.current.r * 8);
+  const cursorOpacity = 0.55 + (emotionWheelState.current.r * 0.4);
+
+  el.emotionWheelCursor.style.left = `${px}px`;
+  el.emotionWheelCursor.style.top = `${py}px`;
+  el.emotionWheelCursor.style.width = `${cursorSize}px`;
+  el.emotionWheelCursor.style.height = `${cursorSize}px`;
+  el.emotionWheelCursor.style.opacity = `${cursorOpacity}`;
+}
+
 function renderEmotionState() {
-  const { instant, shortTerm, longTerm } = audioAnalysis.states;
+  if (audioAnalysis.trackProfileDirty) {
+    audioAnalysis.trackProfile = computeTrackEmotionProfile();
+    audioAnalysis.states.trackPerceived = { ...audioAnalysis.trackProfile.perceived };
+    audioAnalysis.trackProfileDirty = false;
+  }
+
+  const {
+    instant,
+    shortTerm,
+    longTerm,
+    trackAverage,
+    trackPerceived
+  } = audioAnalysis.states;
+  const displayedValence = trackPerceived.valence;
 
   el.visualizeConfidence.textContent = `Confiance ${Math.round(audioAnalysis.confidence * 100)}%`;
   el.visualizeElapsed.textContent = `${Math.round(audioAnalysis.elapsedMs)} ms analyses`;
-  el.visualizeInstantEnergy.textContent = longTerm.energy.toFixed(2);
-  el.visualizeInstantTension.textContent = longTerm.tension.toFixed(2);
-  el.visualizeInstantTemperament.textContent = longTerm.temperament.toFixed(2);
-  el.visualizeInstantStability.textContent = longTerm.stability.toFixed(2);
+  el.visualizeTrackAverageEnergy.textContent = trackPerceived.energy.toFixed(2);
+  el.visualizeTrackAverageTension.textContent = trackPerceived.tension.toFixed(2);
+  el.visualizeTrackAverageTemperament.textContent = trackPerceived.temperament.toFixed(2);
+  el.visualizeTrackAverageStability.textContent = trackPerceived.stability.toFixed(2);
+  el.visualizeTrackAverageValence.textContent = displayedValence.toFixed(2);
 
   setEmotionBar(el.visualizeBarInstantEnergy, instant.energy);
   setEmotionBar(el.visualizeBarShortEnergy, shortTerm.energy);
   setEmotionBar(el.visualizeBarLongEnergy, longTerm.energy);
+  setEmotionBar(el.visualizeBarTrackEnergy, trackAverage.energy);
+  setEmotionBar(el.visualizeBarPerceivedEnergy, trackPerceived.energy);
   setEmotionBar(el.visualizeBarInstantTension, instant.tension);
   setEmotionBar(el.visualizeBarShortTension, shortTerm.tension);
   setEmotionBar(el.visualizeBarLongTension, longTerm.tension);
+  setEmotionBar(el.visualizeBarTrackTension, trackAverage.tension);
+  setEmotionBar(el.visualizeBarPerceivedTension, trackPerceived.tension);
   setEmotionBar(el.visualizeBarInstantStability, instant.stability);
   setEmotionBar(el.visualizeBarShortStability, shortTerm.stability);
   setEmotionBar(el.visualizeBarLongStability, longTerm.stability);
+  setEmotionBar(el.visualizeBarTrackStability, trackAverage.stability);
+  setEmotionBar(el.visualizeBarPerceivedStability, trackPerceived.stability);
+  setBipolarEmotionBar(el.visualizeBarHeaderValence, displayedValence);
+  setBipolarEmotionBar(el.visualizeBarInstantValence, instant.valence);
+  setBipolarEmotionBar(el.visualizeBarShortValence, shortTerm.valence);
+  setBipolarEmotionBar(el.visualizeBarLongValence, longTerm.valence);
+  setBipolarEmotionBar(el.visualizeBarTrackValence, trackAverage.valence);
+  setBipolarEmotionBar(el.visualizeBarPerceivedValence, trackPerceived.valence);
   setBipolarEmotionBar(el.visualizeBarInstantTemperament, instant.temperament);
   setBipolarEmotionBar(el.visualizeBarShortTemperament, shortTerm.temperament);
   setBipolarEmotionBar(el.visualizeBarLongTemperament, longTerm.temperament);
+  setBipolarEmotionBar(el.visualizeBarTrackTemperament, trackAverage.temperament);
+  setBipolarEmotionBar(el.visualizeBarPerceivedTemperament, trackPerceived.temperament);
 
   document.querySelectorAll('.emotion-row-value').forEach((node) => {
     const dimension = node.dataset.dimension;
     const scope = node.dataset.scope;
     const source = scope === 'instant'
       ? instant
-      : (scope === 'short' ? shortTerm : longTerm);
+      : (scope === 'short'
+        ? shortTerm
+        : (scope === 'long'
+          ? longTerm
+          : (scope === 'track' ? trackAverage : trackPerceived)));
     const value = typeof source[dimension] === 'number' ? source[dimension] : 0;
     node.textContent = value.toFixed(2);
   });
+
+  renderEmotionWheel(true);
+}
+
+function setEmotionCardExpanded(button, details, expanded) {
+  details.hidden = !expanded;
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
+function syncGlobalEmotionCardsToggle() {
+  if (!el.visualizeCardsToggleBtn || !el.visualizeCardsToggleIcon || !el.visualizationGrid) {
+    return;
+  }
+
+  const toggleButtons = [...el.visualizationGrid.querySelectorAll('.emotion-card-toggle')];
+  const allExpanded = toggleButtons.length > 0 && toggleButtons.every((button) => button.getAttribute('aria-expanded') === 'true');
+  el.visualizeCardsToggleBtn.setAttribute('aria-expanded', allExpanded ? 'true' : 'false');
+  el.visualizeCardsToggleIcon.textContent = allExpanded ? 'unfold_less' : 'unfold_more';
+}
+
+function initEmotionCardToggles() {
+  if (!el.visualizationGrid) {
+    return;
+  }
+
+  el.visualizationGrid.querySelectorAll('.emotion-card-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const targetId = button.getAttribute('aria-controls');
+      if (!targetId) {
+        return;
+      }
+
+      const details = document.getElementById(targetId);
+      if (!details) {
+        return;
+      }
+
+      const willExpand = details.hidden;
+      setEmotionCardExpanded(button, details, willExpand);
+      syncGlobalEmotionCardsToggle();
+    });
+  });
+
+  if (el.visualizeCardsToggleBtn) {
+    el.visualizeCardsToggleBtn.addEventListener('click', () => {
+      const toggleButtons = [...el.visualizationGrid.querySelectorAll('.emotion-card-toggle')];
+      const detailPanels = toggleButtons.map((button) => document.getElementById(button.getAttribute('aria-controls')));
+      const shouldExpandAll = toggleButtons.some((button) => button.getAttribute('aria-expanded') !== 'true');
+
+      toggleButtons.forEach((button, index) => {
+        const details = detailPanels[index];
+        if (!details) {
+          return;
+        }
+
+        setEmotionCardExpanded(button, details, shouldExpandAll);
+      });
+
+      syncGlobalEmotionCardsToggle();
+    });
+  }
+
+  syncGlobalEmotionCardsToggle();
 }
 
 function computeZeroCrossingRate(timeData) {
@@ -478,6 +1156,7 @@ function computeAudioFeatures() {
 
   let totalMagnitude = 0;
   let weightedMagnitude = 0;
+  let weightedSquaredMagnitude = 0;
   let lowBand = 0;
   let midBand = 0;
   let highBand = 0;
@@ -489,6 +1168,7 @@ function computeAudioFeatures() {
     const frequency = i * binFrequency;
     totalMagnitude += magnitude;
     weightedMagnitude += magnitude * frequency;
+    weightedSquaredMagnitude += magnitude * frequency * frequency;
 
     if (frequency < 250) {
       lowBand += magnitude;
@@ -513,6 +1193,9 @@ function computeAudioFeatures() {
   }
 
   const spectralCentroidHz = totalMagnitude > 0 ? weightedMagnitude / totalMagnitude : 0;
+  const spectralSpreadHz = totalMagnitude > 0
+    ? Math.sqrt(Math.max((weightedSquaredMagnitude / totalMagnitude) - (spectralCentroidHz * spectralCentroidHz), 0))
+    : 0;
   const totalBand = Math.max(totalMagnitude, 0.0001);
   const averageSpectrumMagnitude = totalMagnitude / Math.max(1, binCount);
   const lowBandRatioRaw = lowBand / totalBand;
@@ -545,11 +1228,12 @@ function computeAudioFeatures() {
     rmsRaw: rms,
     peakRaw: peak,
     averageSpectrumMagnitude,
-    analysisTimeMs: (el.audioPlayer.currentTime || 0) * 1000,
+    analysisTimeMs: (getActiveAudioPlayer().currentTime || 0) * 1000,
     rms: normalizeFeature('rms', rms),
     peak: normalizeFeature('peak', peak),
     zeroCrossingRate: normalizeFeature('zeroCrossingRate', zeroCrossingRate),
     spectralCentroid: normalizeFeature('spectralCentroidHz', spectralCentroidHz),
+    spectralSpread: normalizeFeature('spectralSpreadHz', spectralSpreadHz),
     spectralFlux: normalizeFeature('spectralFlux', spectralFluxRawNormalized),
     lowBandRatio: normalizeFeature('lowBandRatio', lowBandRatioRaw),
     midBandRatio: normalizeFeature('midBandRatio', midBandRatioRaw),
@@ -570,10 +1254,8 @@ function updateAudioEmotionState(features) {
   const dynamicVariation = normalizeFeature('dynamicVariation', dynamicVariationRaw);
   const spectralVariation = normalizeFeature('spectralVariation', spectralVariationRaw);
   const transientSharpness = normalizeFeature('transientSharpness', transientSharpnessRaw);
-  const roughnessProxy = clamp((features.highBandRatio * 0.6) + (features.zeroCrossingRate * 0.4), 0, 1);
-  const highBandPressure = clamp((features.highBandRatio * 0.65) + (features.spectralCentroid * 0.35), 0, 1);
-  const onsetDensity = clamp((features.spectralFlux * 0.7) + (transientSharpness * 0.3), 0, 1);
-  const onsetStrength = clamp((features.spectralFlux * 0.55) + (transientSharpness * 0.45), 0, 1);
+  const transientDensity = clamp((0.65 * transientSharpness) + (0.35 * features.peak), 0, 1);
+  const onsetStrength = transientDensity;
   const isActiveFrame = features.rmsRaw > AUDIO_ANALYSIS_SILENCE_RMS_THRESHOLD
     || features.peakRaw > AUDIO_ANALYSIS_SILENCE_PEAK_THRESHOLD
     || features.averageSpectrumMagnitude > AUDIO_ANALYSIS_SILENCE_SPECTRUM_THRESHOLD;
@@ -593,7 +1275,7 @@ function updateAudioEmotionState(features) {
 
   pushLimited(audioAnalysis.featureHistory, features, 180);
   pushLimited(audioAnalysis.dynamicHistory, dynamicVariation, 90);
-  pushLimited(audioAnalysis.onsetHistory, onsetDensity, 90);
+  pushLimited(audioAnalysis.onsetHistory, transientDensity, 90);
   pushLimited(audioAnalysis.rhythmFluxHistory, features.spectralFlux, 90);
 
   const averagedDynamicVariation = averageValues(audioAnalysis.dynamicHistory);
@@ -609,68 +1291,97 @@ function updateAudioEmotionState(features) {
   const rhythmicDensityRaw = recentOnsets.length / recentWindowSeconds;
   const rhythmicDensity = normalizeFeature('rhythmicDensity', rhythmicDensityRaw);
   const temporalCompressionRaw = averageValues(audioAnalysis.activeFrameHistory);
-  const temporalCompression = normalizeFeature('temporalCompression', temporalCompressionRaw);
   const averageIoi = averageValues(audioAnalysis.ioiHistory);
   const ioiVarianceRaw = averageValues(
     audioAnalysis.ioiHistory.map((ioi) => Math.abs(ioi - averageIoi))
   );
   const ioiVariance = normalizeFeature('ioiVariance', ioiVarianceRaw);
-  const rhythmicPressure = clamp(rhythmicDensity * (1 - ioiVariance), 0, 1);
+  const patternDriftRaw = averageAbsoluteDelta(audioAnalysis.ioiHistory);
+  const patternDrift = normalizeFeature('patternDrift', patternDriftRaw);
   const lowDynamicVariation = clamp(1 - averagedDynamicVariation, 0, 1);
   const lowHighFreqPresence = clamp(1 - features.highPresenceRatio, 0, 1);
-  const lowEnergyContinuity = clamp(
-    (0.55 * (1 - features.rms))
-    + (0.45 * temporalCompression),
-    0,
-    1
-  );
   const spectralWarmth = clamp(
     (0.60 * features.lowBandRatio)
     + (0.40 * (1 - features.highPresenceRatio)),
     0,
     1
   );
-
-  const rhythmIrregularity = clamp((fluxVariance * 1.8) + (averagedDynamicVariation * 0.45), 0, 1);
-  const tempoConfidence = clamp(1 - (fluxVariance * 1.4), 0, 1);
-  const sectionChangeProbability = clamp((spectralVariation * 0.6) + (dynamicVariation * 0.4), 0, 1);
-  const noiseRoughness = clamp((roughnessProxy * 0.55) + (features.spectralFlux * 0.45), 0, 1);
+  const spectralSharpness = clamp(
+    (0.55 * features.highPresenceRatio)
+    + (0.25 * features.highBandRatio)
+    + (0.20 * features.spectralSpread),
+    0,
+    1
+  );
+  const rhythmIrregularity = clamp(
+    (0.55 * ioiVariance)
+    + (0.25 * averagedDynamicVariation)
+    + (0.20 * averagedSpectralFlux),
+    0,
+    1
+  );
+  const tempoConfidence = clamp(
+    1 - ((0.65 * ioiVariance) + (0.35 * patternDrift)),
+    0,
+    1
+  );
+  const patternRepetitionScore = clamp(
+    1 - ((0.65 * patternDrift) + (0.35 * ioiVariance)),
+    0,
+    1
+  );
+  const harmonicBrightness = clamp(
+    (0.50 * features.midBandRatio)
+    + (0.30 * features.spectralCentroid)
+    + (0.20 * (1 - features.lowBandRatio)),
+    0,
+    1
+  );
+  const dissonanceLevel = clamp(
+    (0.55 * features.spectralSpread)
+    + (0.25 * features.highPresenceRatio)
+    + (0.20 * features.zeroCrossingRate),
+    0,
+    1
+  );
+  const majorModeConfidence = clamp(
+    (0.45 * features.midBandRatio)
+    + (0.25 * harmonicBrightness)
+    + (0.20 * tempoConfidence)
+    + (0.10 * (1 - dissonanceLevel)),
+    0,
+    1
+  );
 
   const energyRaw = clamp(
-    (0.45 * features.rms)
-    + (0.20 * features.spectralFlux)
-    + (0.20 * averageOnsetDensity)
-    + (0.15 * features.lowBandRatio),
+    (0.50 * features.rms)
+    + (0.25 * averageOnsetDensity)
+    + (0.25 * features.lowBandRatio),
     0,
     1
   );
 
   const tensionRaw = clamp(
-    (0.30 * roughnessProxy)
-    + (0.25 * features.spectralFlux)
-    + (0.25 * ioiVariance)
-    + (0.20 * averagedDynamicVariation)
-    + (0.10 * rhythmIrregularity)
-    + (0.10 * highBandPressure),
+    (0.35 * averagedDynamicVariation)
+    + (0.30 * ioiVariance)
+    + (0.20 * rhythmIrregularity)
+    + (0.15 * spectralVariation),
     0,
     1
   );
 
   const aggressivenessRaw = clamp(
-    (0.35 * rhythmicPressure)
-    + (0.15 * temporalCompression)
-    + (0.20 * features.highPresenceRatio)
-    + (0.15 * features.spectralFlux)
-    + (0.15 * (1 - ioiVariance)),
+    (0.40 * features.highPresenceRatio)
+    + (0.30 * spectralSharpness)
+    + (0.30 * transientDensity),
     0,
     1
   );
 
   const softnessRaw = clamp(
-    (0.30 * lowEnergyContinuity)
-    + (0.25 * spectralWarmth)
-    + (0.25 * lowDynamicVariation)
-    + (0.20 * lowHighFreqPresence),
+    (0.40 * spectralWarmth)
+    + (0.30 * lowDynamicVariation)
+    + (0.30 * lowHighFreqPresence),
     0,
     1
   );
@@ -678,20 +1389,29 @@ function updateAudioEmotionState(features) {
   const temperamentValue = clamp(aggressivenessRaw - softnessRaw, -1, 1);
 
   const stabilityRaw = clamp(
-    (0.30 * (1 - rhythmIrregularity))
+    (0.35 * (1 - rhythmIrregularity))
     + (0.25 * (1 - averagedDynamicVariation))
-    + (0.20 * (1 - features.spectralFlux))
-    + (0.15 * tempoConfidence)
-    + (0.10 * (1 - sectionChangeProbability)),
+    + (0.20 * tempoConfidence)
+    + (0.20 * patternRepetitionScore),
     0,
     1
   );
+  const valenceRaw = clamp(
+    (0.35 * harmonicBrightness)
+    + (0.25 * features.spectralCentroid)
+    + (0.20 * majorModeConfidence)
+    + (0.20 * (1 - dissonanceLevel)),
+    0,
+    1
+  );
+  const valenceValue = clamp((valenceRaw * 2) - 1, -1, 1);
 
   audioAnalysis.states.instant = {
     energy: energyRaw,
     tension: tensionRaw,
     temperament: temperamentValue,
-    stability: stabilityRaw
+    stability: stabilityRaw,
+    valence: valenceValue
   };
 
   audioAnalysis.states.shortTerm = smoothEmotionVector(
@@ -701,7 +1421,7 @@ function updateAudioEmotionState(features) {
   );
 
   const longNext = {};
-  ['energy', 'tension', 'temperament', 'stability'].forEach((dimension) => {
+  EMOTION_DIMENSIONS.forEach((dimension) => {
     const shortValue = audioAnalysis.states.shortTerm[dimension];
     const longValue = audioAnalysis.states.longTerm[dimension];
     const delta = Math.abs(shortValue - longValue);
@@ -713,8 +1433,9 @@ function updateAudioEmotionState(features) {
       audioAnalysis.driftCounters[dimension] = 0;
     }
 
-    const baseAlpha = dimension === 'temperament' ? 0.02 : AUDIO_ANALYSIS_LONG_ALPHA;
-    const fastAlpha = dimension === 'temperament' ? 0.055 : AUDIO_ANALYSIS_LONG_ALPHA_FAST;
+    const isBipolarDimension = dimension === 'temperament' || dimension === 'valence';
+    const baseAlpha = isBipolarDimension ? 0.02 : AUDIO_ANALYSIS_LONG_ALPHA;
+    const fastAlpha = isBipolarDimension ? 0.055 : AUDIO_ANALYSIS_LONG_ALPHA_FAST;
     const alpha = audioAnalysis.driftCounters[dimension] >= AUDIO_ANALYSIS_DRIFT_UPDATES
       ? fastAlpha
       : baseAlpha;
@@ -723,7 +1444,15 @@ function updateAudioEmotionState(features) {
   });
 
   audioAnalysis.states.longTerm = longNext;
-  audioAnalysis.elapsedMs = (el.audioPlayer.currentTime || 0) * 1000;
+  recordTrackEmotionSample(audioAnalysis.states.instant, features.analysisTimeMs);
+  audioAnalysis.trackAverageSamples += 1;
+  EMOTION_DIMENSIONS.forEach((dimension) => {
+    const currentAverage = audioAnalysis.states.trackAverage[dimension];
+    const instantValue = audioAnalysis.states.instant[dimension];
+    audioAnalysis.states.trackAverage[dimension] = currentAverage
+      + ((instantValue - currentAverage) / audioAnalysis.trackAverageSamples);
+  });
+  audioAnalysis.elapsedMs = (getActiveAudioPlayer().currentTime || 0) * 1000;
   audioAnalysis.confidence = clamp(
     normalize(audioAnalysis.featureHistory.length, 1, 40) * 0.75
     + (tempoConfidence * 0.15)
@@ -734,10 +1463,6 @@ function updateAudioEmotionState(features) {
 }
 
 function ensureAudioAnalysisContext() {
-  if (audioAnalysis.context && audioAnalysis.analyser && audioAnalysis.source) {
-    return true;
-  }
-
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextCtor) {
     return false;
@@ -747,19 +1472,25 @@ function ensureAudioAnalysisContext() {
     audioAnalysis.context = new AudioContextCtor();
   }
 
-  if (!audioAnalysis.source) {
-    audioAnalysis.source = audioAnalysis.context.createMediaElementSource(el.audioPlayer);
-  }
-
   if (!audioAnalysis.analyser) {
     audioAnalysis.analyser = audioAnalysis.context.createAnalyser();
     audioAnalysis.analyser.fftSize = 2048;
     audioAnalysis.analyser.smoothingTimeConstant = 0.78;
-    audioAnalysis.source.connect(audioAnalysis.analyser);
-    audioAnalysis.source.connect(audioAnalysis.context.destination);
     audioAnalysis.timeData = new Uint8Array(audioAnalysis.analyser.fftSize);
     audioAnalysis.freqData = new Uint8Array(audioAnalysis.analyser.frequencyBinCount);
   }
+
+  AUDIO_PLAYER_KEYS.forEach((key) => {
+    if (audioAnalysis.sources[key]) {
+      return;
+    }
+
+    const player = getAudioPlayerByKey(key);
+    const source = audioAnalysis.context.createMediaElementSource(player);
+    source.connect(audioAnalysis.analyser);
+    source.connect(audioAnalysis.context.destination);
+    audioAnalysis.sources[key] = source;
+  });
 
   return true;
 }
@@ -786,8 +1517,10 @@ async function ensureAudioAnalysisRunning() {
 
 function audioAnalysisLoop(now = performance.now()) {
   audioAnalysisFrameId = requestAnimationFrame(audioAnalysisLoop);
+  const activePlayer = getActiveAudioPlayer();
 
-  if (!audioAnalysis.analyser || el.audioPlayer.paused || el.audioPlayer.ended || !state.currentTrack) {
+  if (!audioAnalysis.analyser || activePlayer.paused || activePlayer.ended || !state.currentTrack) {
+    renderEmotionWheel();
     return;
   }
 
@@ -823,7 +1556,7 @@ function startCronPolling() {
 }
 
 async function requestWakeLock() {
-  if (!wakeLockEnabled || wakeLock || el.audioPlayer.paused || el.audioPlayer.ended || document.hidden) {
+  if (!wakeLockEnabled || wakeLock || !hasAnyPlayingAudio() || document.hidden) {
     return;
   }
 
@@ -2360,6 +3093,117 @@ function buildMediaUrl(file) {
   return `/?get=moomuse_stream&path=${encodeURIComponent(playbackPath)}`;
 }
 
+function finalizeCrossfadeTransition() {
+  stopCrossfadeAnimation();
+  state.crossfadeInProgress = false;
+  state.crossfadePlayerStarted = false;
+  const fadingPlayerKey = state.fadingPlayerKey;
+  const fadingPlayer = getFadingAudioPlayer();
+
+  const activePlayer = getActiveAudioPlayer();
+  activePlayer.volume = 1;
+  if (activePlayer.paused && !activePlayer.ended) {
+    activePlayer.play().catch((error) => {
+      console.error(error);
+    });
+  }
+
+  if (fadingPlayer) {
+    clearAudioPlayer(fadingPlayer);
+  }
+
+  state.fadingPlayerKey = null;
+  state.bufferPlayerKey = fadingPlayerKey || state.bufferPlayerKey;
+  state.bufferTrack = null;
+  state.bufferPlaylistIndex = -1;
+  getBufferAudioPlayer().volume = 1;
+
+  prepareUpcomingTracks();
+  renderPlaylist();
+  renderSavedPlaylists();
+  ensureAudioAnalysisRunning();
+}
+
+function startCrossfadeToPreparedTrack() {
+  if (state.crossfadeInProgress || !state.queuedTrack) {
+    return;
+  }
+
+  const outgoingKey = state.activePlayerKey;
+  const incomingKey = state.queuedPlayerKey;
+  const nextQueuedKey = state.bufferPlayerKey;
+  const nextBufferKey = outgoingKey;
+  const outgoingPlayer = getAudioPlayerByKey(outgoingKey);
+  const incomingPlayer = getAudioPlayerByKey(incomingKey);
+  const remainingMs = Math.max(0, ((outgoingPlayer.duration || 0) - (outgoingPlayer.currentTime || 0)) * 1000);
+  const fadeDurationMs = clamp(remainingMs || CROSSFADE_DURATION_MS, CROSSFADE_MIN_DURATION_MS, CROSSFADE_DURATION_MS);
+
+  state.crossfadeInProgress = true;
+  state.crossfadePlayerStarted = false;
+  state.fadingPlayerKey = outgoingKey;
+  incomingPlayer.volume = 0;
+
+  incomingPlayer.play().then(() => {
+    state.crossfadePlayerStarted = true;
+    state.activePlayerKey = incomingKey;
+    state.currentTrack = state.queuedTrack;
+    state.currentPlaylistIndex = state.queuedPlaylistIndex;
+    state.queuedPlayerKey = nextQueuedKey;
+    state.bufferPlayerKey = nextBufferKey;
+    state.queuedTrack = state.bufferTrack;
+    state.queuedPlaylistIndex = state.bufferPlaylistIndex;
+    state.bufferTrack = null;
+    state.bufferPlaylistIndex = -1;
+    syncAudioPlayerVisibility();
+    renderPlayerUiOnly();
+    renderPlaylist();
+    renderSavedPlaylists();
+
+    const startedAt = performance.now();
+    const step = (now) => {
+      const progress = clamp((now - startedAt) / fadeDurationMs, 0, 1);
+      outgoingPlayer.volume = 1 - progress;
+      incomingPlayer.volume = progress;
+
+      if (progress < 1 && state.crossfadeInProgress) {
+        crossfadeAnimationFrameId = requestAnimationFrame(step);
+        return;
+      }
+
+      stopCrossfadeAnimation();
+      outgoingPlayer.volume = 0;
+      incomingPlayer.volume = 1;
+    };
+
+    crossfadeAnimationFrameId = requestAnimationFrame(step);
+  }).catch((error) => {
+    console.error(error);
+    state.crossfadeInProgress = false;
+    state.crossfadePlayerStarted = false;
+    state.fadingPlayerKey = null;
+    outgoingPlayer.volume = 1;
+    incomingPlayer.volume = 0;
+    setStatus('Fondu bloque par le navigateur. La piste suivante demarrera normalement.', true);
+  });
+}
+
+function maybeStartCrossfade(player) {
+  if (state.crossfadeInProgress || player !== getActiveAudioPlayer() || !state.queuedTrack) {
+    return;
+  }
+
+  const duration = Number(player.duration);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return;
+  }
+
+  const leadTime = Math.min(CROSSFADE_TRIGGER_SECONDS, Math.max(3, duration / 3));
+  const remainingSeconds = duration - player.currentTime;
+  if (remainingSeconds <= leadTime) {
+    startCrossfadeToPreparedTrack();
+  }
+}
+
 function addToPlaylist(path, options = {}) {
   const {
     silent = false,
@@ -2440,6 +3284,7 @@ function renderPlaylist() {
   if (!state.playlist.length) {
     el.playlistPanel.className = 'playlist-list muted';
     el.playlistPanel.innerHTML = 'Aucun fichier dans la playlist.';
+    prepareUpcomingTracks();
     return;
   }
 
@@ -2476,6 +3321,8 @@ function renderPlaylist() {
       removeFromPlaylist(Number(button.dataset.index));
     });
   });
+
+  prepareUpcomingTracks();
 }
 
 function exportPlaylist() {
@@ -2536,6 +3383,7 @@ async function copyPlaylistJson() {
 function syncCurrentTrackWithPlaylist() {
   if (!state.currentTrack) {
     state.currentPlaylistIndex = -1;
+    cancelCrossfade();
     return;
   }
 
@@ -2543,8 +3391,10 @@ function syncCurrentTrackWithPlaylist() {
   if (index === -1) {
     state.currentTrack = null;
     state.currentPlaylistIndex = -1;
-    el.audioPlayer.pause();
-    delete el.audioPlayer.dataset.path;
+    cancelCrossfade();
+    clearAudioPlayer(el.audioPlayer);
+    clearAudioPlayer(el.secondaryAudioPlayer);
+    clearAudioPlayer(el.tertiaryAudioPlayer);
     renderPlayer();
   }
   else {
@@ -2609,6 +3459,7 @@ function playPlaylistIndex(index, autoPlay = true) {
     return;
   }
 
+  cancelCrossfade();
   state.currentPlaylistIndex = index;
   state.currentTrack = file;
   renderPlayer(autoPlay);
@@ -2618,18 +3469,13 @@ function playPlaylistIndex(index, autoPlay = true) {
 }
 
 function skipToNextPlaylistTrack() {
-  if (!state.playlist.length) {
+  if (!state.playlist.length || state.crossfadeInProgress) {
     return;
   }
 
-  const nextIndex = state.currentPlaylistIndex + 1;
-  if (nextIndex >= 0 && nextIndex < state.playlist.length) {
+  const nextIndex = getNextPlaylistIndex();
+  if (nextIndex >= 0) {
     playPlaylistIndex(nextIndex, true);
-    return;
-  }
-
-  if (state.repeatMode) {
-    playPlaylistIndex(0, true);
   }
 }
 
@@ -2639,6 +3485,7 @@ function playFile(path) {
     return;
   }
 
+  cancelCrossfade();
   state.currentTrack = file;
   state.currentPlaylistIndex = state.playlist.indexOf(path);
   renderPlayer(true);
@@ -2647,14 +3494,11 @@ function playFile(path) {
   setStatus(`Lecture : ${file.name}`);
 }
 
-function renderPlayer(autoPlay = false) {
+function renderPlayerUiOnly() {
   const track = state.currentTrack;
-
   if (!track) {
     updateNowPlayingTitle('Aucun media selectionne');
     el.detailsPanel.innerHTML = 'Les informations du fichier selectionne apparaitront ici.';
-    el.audioPlayer.removeAttribute('src');
-    el.audioPlayer.load();
     syncVisualizationTrack(null);
     syncPlayerActions();
     return;
@@ -2680,24 +3524,48 @@ function renderPlayer(autoPlay = false) {
   `;
 
   syncDetailsVisibility();
+  syncVisualizationTrack(track);
+  syncPlayerActions();
+}
+
+function renderPlayer(autoPlay = false) {
+  const track = state.currentTrack;
+  const activePlayer = getActiveAudioPlayer();
+
+  if (!track) {
+    cancelCrossfade();
+    clearAudioPlayer(el.audioPlayer);
+    clearAudioPlayer(el.secondaryAudioPlayer);
+    clearAudioPlayer(el.tertiaryAudioPlayer);
+    renderPlayerUiOnly();
+    syncAudioPlayerVisibility();
+    return;
+  }
+
+  renderPlayerUiOnly();
 
   const mediaUrl = buildMediaUrl(track);
   if (!mediaUrl) {
-    syncVisualizationTrack(track);
+    prepareUpcomingTracks();
     return;
   }
 
   const playbackPath = getTrackPlaybackPath(track);
 
-  if (el.audioPlayer.dataset.path !== playbackPath) {
-    el.audioPlayer.src = mediaUrl;
-    el.audioPlayer.dataset.path = playbackPath;
+  if (activePlayer.dataset.path !== playbackPath) {
+    activePlayer.src = mediaUrl;
+    activePlayer.dataset.path = playbackPath;
   }
 
-  syncVisualizationTrack(track);
+  syncAudioPlayerVisibility();
+  prepareUpcomingTracks();
 
   if (autoPlay) {
-    el.audioPlayer.play().catch(() => {
+    if (activePlayer.ended) {
+      activePlayer.currentTime = 0;
+    }
+
+    activePlayer.play().catch(() => {
       setStatus('Lecture bloquee par le navigateur. Clique sur Play.', true);
     });
   }
@@ -2728,10 +3596,9 @@ if (el.playFirstBtn) {
 
 if (el.clearSelectionBtn) {
   el.clearSelectionBtn.addEventListener('click', () => {
+    cancelCrossfade();
     state.currentTrack = null;
     state.currentPlaylistIndex = -1;
-    el.audioPlayer.pause();
-    delete el.audioPlayer.dataset.path;
     renderPlayer();
     renderPlaylist();
     setStatus('Lecture arretee.');
@@ -2900,16 +3767,88 @@ el.cancelPlaylistEditBtn.addEventListener('click', () => {
 el.savePlaylistEditBtn.addEventListener('click', () => {
   savePlaylistEdit();
 });
-el.audioPlayer.addEventListener('ended', () => {
+function handlePlayerEnded(playerKey) {
+  if (state.crossfadeInProgress && playerKey === state.fadingPlayerKey) {
+    finalizeCrossfadeTransition();
+    return;
+  }
+
+  if (playerKey !== state.activePlayerKey) {
+    return;
+  }
+
   skipToNextPlaylistTrack();
-});
-el.audioPlayer.addEventListener('play', () => {
+}
+
+function handlePlayerPlay() {
+  if (state.crossfadeInProgress) {
+    state.crossfadePlayerStarted = true;
+    requestWakeLock();
+    return;
+  }
+
   ensureAudioAnalysisRunning();
   requestWakeLock();
-});
-el.audioPlayer.addEventListener('pause', () => {
-  releaseWakeLock();
+}
+
+function handlePlayerPause() {
+  if (!hasAnyPlayingAudio()) {
+    releaseWakeLock();
+  }
+
   renderEmotionState();
+}
+
+function handlePlayerTimeUpdate(playerKey) {
+  if (playerKey !== state.activePlayerKey) {
+    return;
+  }
+
+  maybeStartCrossfade(getActiveAudioPlayer());
+}
+
+function handlePlayerSeeked(playerKey) {
+  if (playerKey !== state.activePlayerKey) {
+    return;
+  }
+
+  stopCrossfadeAnimation();
+  rebuildUpcomingPlayers();
+  maybeStartCrossfade(getActiveAudioPlayer());
+}
+
+el.audioPlayer.addEventListener('ended', () => {
+  handlePlayerEnded('primary');
+});
+el.secondaryAudioPlayer.addEventListener('ended', () => {
+  handlePlayerEnded('secondary');
+});
+el.tertiaryAudioPlayer.addEventListener('ended', () => {
+  handlePlayerEnded('tertiary');
+});
+el.audioPlayer.addEventListener('play', handlePlayerPlay);
+el.secondaryAudioPlayer.addEventListener('play', handlePlayerPlay);
+el.tertiaryAudioPlayer.addEventListener('play', handlePlayerPlay);
+el.audioPlayer.addEventListener('pause', handlePlayerPause);
+el.secondaryAudioPlayer.addEventListener('pause', handlePlayerPause);
+el.tertiaryAudioPlayer.addEventListener('pause', handlePlayerPause);
+el.audioPlayer.addEventListener('timeupdate', () => {
+  handlePlayerTimeUpdate('primary');
+});
+el.secondaryAudioPlayer.addEventListener('timeupdate', () => {
+  handlePlayerTimeUpdate('secondary');
+});
+el.tertiaryAudioPlayer.addEventListener('timeupdate', () => {
+  handlePlayerTimeUpdate('tertiary');
+});
+el.audioPlayer.addEventListener('seeked', () => {
+  handlePlayerSeeked('primary');
+});
+el.secondaryAudioPlayer.addEventListener('seeked', () => {
+  handlePlayerSeeked('secondary');
+});
+el.tertiaryAudioPlayer.addEventListener('seeked', () => {
+  handlePlayerSeeked('tertiary');
 });
 el.detailsToggleBtn.addEventListener('click', () => {
   state.detailsExpanded = !state.detailsExpanded;
@@ -2934,7 +3873,7 @@ document.addEventListener('visibilitychange', () => {
     return;
   }
 
-  if (!el.audioPlayer.paused && !el.audioPlayer.ended) {
+  if (hasAnyPlayingAudio()) {
     requestWakeLock();
   }
 });
@@ -2959,6 +3898,8 @@ syncPlaylistsVisibility();
 syncContentFilterButtons();
 syncPlaylistModeButtons();
 syncPlayerActions();
+syncAudioPlayerVisibility();
+initEmotionCardToggles();
 syncVisualizationTrack(state.currentTrack);
 renderSavedPlaylists();
 renderPlaylist();

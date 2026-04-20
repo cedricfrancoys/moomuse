@@ -166,7 +166,8 @@ body {
 .statusbar-player {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 8px 12px;
+  position: relative;
+  min-height: 54px;
 }
 
 .statusbar-actions {
@@ -975,6 +976,210 @@ p {
   margin-top: -4px;
 }
 
+.emotion-wheel-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 14%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--card-bg-subtle) 92%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
+}
+
+.emotion-wheel-wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.emotion-wheel-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.emotion-wheel {
+  --wheel-size: min(300px, 72vw);
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, white 16%, transparent),
+    0 18px 40px color-mix(in srgb, black 22%, transparent);
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, white 18%, transparent) 0%, transparent 32%),
+    radial-gradient(circle at center, transparent 58%, color-mix(in srgb, black 20%, transparent) 100%),
+    conic-gradient(
+      #ffd700 0deg,
+      #ff8c00 45deg,
+      #ff3b3b 90deg,
+      #c0392b 135deg,
+      #6c5ce7 180deg,
+      #3498db 225deg,
+      #2ecc71 270deg,
+      #a3e635 315deg,
+      #ffd700 360deg
+    );
+}
+
+.emotion-wheel::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, white 24%, transparent);
+  pointer-events: none;
+}
+
+.emotion-wheel-center,
+.emotion-wheel-crosshair {
+  position: absolute;
+  pointer-events: none;
+}
+
+.emotion-wheel-center {
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 72%, transparent);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--panel) 48%, transparent);
+  z-index: 2;
+}
+
+.emotion-wheel-crosshair-x {
+  inset: 50% 10% auto 10%;
+  height: 1px;
+  background: color-mix(in srgb, white 32%, transparent);
+  z-index: 1;
+}
+
+.emotion-wheel-crosshair-y {
+  inset: 10% auto 10% 50%;
+  width: 1px;
+  background: color-mix(in srgb, white 32%, transparent);
+  z-index: 1;
+}
+
+.emotion-wheel-cursor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #ffe082 30%, #ff6f61 100%);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, #ffcf5c 18%, transparent),
+    0 8px 18px rgba(0, 0, 0, 0.32);
+  transform: translate(-50%, -50%);
+  will-change: left, top, width, height, opacity;
+  z-index: 3;
+  opacity: 0.92;
+  transition: width 0.24s ease, height 0.24s ease, opacity 0.24s ease;
+}
+
+.emotion-wheel-label {
+  position: absolute;
+  z-index: 2;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--text) 40%, transparent);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  opacity: 0.18;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.2s ease, color 0.2s ease, text-shadow 0.2s ease;
+}
+
+.emotion-wheel:hover .emotion-wheel-label,
+.emotion-wheel:focus-within .emotion-wheel-label {
+  opacity: 0.68;
+  color: color-mix(in srgb, var(--text) 86%, white 14%);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.emotion-wheel-label-n {
+  left: 50%;
+  top: 13%;
+}
+
+.emotion-wheel-label-ne {
+  left: 76%;
+  top: 24%;
+}
+
+.emotion-wheel-label-e {
+  left: 87%;
+  top: 50%;
+}
+
+.emotion-wheel-label-se {
+  left: 76%;
+  top: 76%;
+}
+
+.emotion-wheel-label-s {
+  left: 50%;
+  top: 87%;
+}
+
+.emotion-wheel-label-sw {
+  left: 24%;
+  top: 76%;
+}
+
+.emotion-wheel-label-w {
+  left: 13%;
+  top: 50%;
+}
+
+.emotion-wheel-label-nw {
+  left: 24%;
+  top: 24%;
+}
+
+.emotion-wheel-legend {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 40ch;
+}
+
+.emotion-card-spotlight {
+  gap: 10px;
+  min-height: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card-bg-subtle) 96%, transparent), color-mix(in srgb, var(--panel) 88%, transparent));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    0 10px 24px color-mix(in srgb, black 10%, transparent);
+}
+
+.emotion-card-spotlight .emotion-card-header {
+  align-items: flex-start;
+}
+
+.emotion-card-spotlight .emotion-card-title {
+  min-width: 72px;
+}
+
+.emotion-card-spotlight #visualizeTrackAverageValence {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 .visualization-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -991,11 +1196,49 @@ p {
   background: var(--card-bg-subtle);
 }
 
+.visualization-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.visualization-card-toggle {
+  flex: 0 0 auto;
+}
+
 .emotion-card-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.emotion-card-title {
+  flex: 0 0 auto;
+}
+
+.emotion-card-header-track {
+  flex: 1 1 auto;
+  min-width: 56px;
+}
+
+.emotion-card-toggle {
+  flex: 0 0 auto;
+}
+
+.emotion-card-toggle .material-symbols-outlined {
+  transition: transform 0.2s ease;
+}
+
+.emotion-card-toggle[aria-expanded="true"] .material-symbols-outlined {
+  transform: rotate(180deg);
+}
+
+.emotion-card-description {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .emotion-bars {
@@ -1006,15 +1249,11 @@ p {
 
 .emotion-bar-row {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 40px;
+  grid-template-columns: 72px minmax(0, 1fr) 40px;
   gap: 10px;
   align-items: center;
   font-size: 12px;
   color: var(--muted);
-}
-
-.emotion-bar-row-long {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .emotion-row-value {
@@ -1049,6 +1288,14 @@ p {
   background: linear-gradient(90deg, #8b7dff 0%, #59d6c8 100%);
 }
 
+.emotion-bar-fill.is-track {
+  background: linear-gradient(90deg, #ffb14d 0%, #ffd166 100%);
+}
+
+.emotion-bar-fill.is-perceived {
+  background: linear-gradient(90deg, #ff7b54 0%, #ffcf5c 100%);
+}
+
 .emotion-bipolar-track::before {
   content: "";
   position: absolute;
@@ -1080,7 +1327,33 @@ p {
   background: linear-gradient(90deg, #f0d880 0%, #ff8f6c 100%);
 }
 
+.emotion-bipolar-fill.is-track {
+  background: linear-gradient(90deg, #ffd166 0%, #ff6f61 100%);
+}
+
+.emotion-bipolar-fill.is-perceived {
+  background: linear-gradient(90deg, #ffcc4d 0%, #ff4f81 100%);
+}
+
 @media (max-width: 900px) {
+  .emotion-wheel-panel {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: left;
+  }
+
+  .emotion-wheel-legend {
+    max-width: 48ch;
+  }
+
+  .emotion-wheel-label {
+    font-size: 10px;
+  }
+
+  .emotion-wheel-side {
+    width: 100%;
+  }
+
   .visualization-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1128,6 +1401,15 @@ audio {
   margin-top: 0;
   display: block;
   filter: saturate(1.05);
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+audio.is-active {
+  z-index: 2;
+  pointer-events: auto;
 }
 
 .search-hint {

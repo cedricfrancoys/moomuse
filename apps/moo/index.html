@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Device Explorer Prototype</title>
+  <title>MooMuse</title>
   <link rel="stylesheet" href="./material.css" />
   <link rel="stylesheet" href="./index.css" />
 </head>
@@ -11,7 +11,7 @@
   <div class="app">
     <aside class="sidebar">
       <div class="mode-switcher" role="radiogroup" aria-label="Mode de fonctionnement">
-        <button class="button mode-switch-btn" id="libraryModeBtn" type="button" aria-pressed="true" title="Consulter la bibliotheque">
+        <button class="button mode-switch-btn" id="libraryModeBtn" type="button" aria-pressed="true" title="Consulter la bibliothèque">
           <span class="material-symbols-outlined" aria-hidden="true">library_music</span>
           <span>Bibliothèque</span>
         </button>
@@ -32,7 +32,7 @@
 
       <div class="brand">
         <h1>MooMuse</h1>
-        <p id="modeDescription">Recherche dans la bibliotheque ou passe en mode explorer pour analyser des dossiers</p>
+        <p id="modeDescription">Recherche dans la bibliothèque ou passe en mode explorateur pour analyser des dossiers.</p>
       </div>
 
       <div id="browseSidebar" hidden>
@@ -48,7 +48,7 @@
       </div>
 
       <div id="librarySidebar">
-        <div class="section-title">Categories</div>
+        <div class="section-title">Catégories</div>
         <div class="library-categories">
           <button class="button ghost library-category-btn" type="button" data-category="all" aria-pressed="true">
             <span class="material-symbols-outlined" aria-hidden="true">music_library_music</span>
@@ -77,15 +77,15 @@
         <div class="tree">
           <div class="tree-item selected">
             <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
-            Vue generale
+            Vue générale
           </div>
         </div>
 
         <div class="sidebar-spacer" aria-hidden="true"></div>
 
         <div class="sidebar-current-directories">
-          <div class="section-title">A propos</div>
-          <div class="muted">Cette zone est prete pour accueillir des vues dediees a la visualisation.</div>
+          <div class="section-title">À propos</div>
+          <div class="muted">Cette zone est prête à accueillir des vues dédiées à la visualisation.</div>
         </div>
       </div>
     </aside>
@@ -95,12 +95,12 @@
         <div class="toolbar-row">
           <button class="button" id="backBtn">Retour</button>
           <button class="button" id="refreshBtn">Actualiser</button>
-          <input class="input" id="pathInput" type="text" placeholder="Chemin a explorer..." />
+          <input class="input" id="pathInput" type="text" placeholder="Chemin à explorer..." />
           <button class="button primary" id="openBtn">Ouvrir</button>
         </div>
         <div class="toolbar-row">
           <input class="input" id="searchInput" type="text" placeholder="Filtrer dans le dossier courant : titre, nom de fichier..." />
-          <div class="content-filter-toggle" role="group" aria-label="Filtres d affichage">
+          <div class="content-filter-toggle" role="group" aria-label="Filtres d'affichage">
             <button class="button ghost filter-toggle-btn" id="showDirectoriesBtn" type="button" aria-pressed="true" title="Afficher les dossiers">
               <span class="material-symbols-outlined" aria-hidden="true">folder</span>
             </button>
@@ -124,7 +124,7 @@
       <div id="visualizeToolbar" hidden style="width: 100%;">
         <div class="toolbar-row">
           <div>
-            <div id="visualizeTrackInfo" class="visualize-track-info muted">Des infos seront visibles en cours de lecture.</div>
+            <div id="visualizeTrackInfo" class="visualize-track-info muted">Des informations seront visibles en cours de lecture.</div>
           </div>
         </div>
       </div>
@@ -135,11 +135,11 @@
         <div class="content-header">
           <div>
             <h2 id="currentTitle">Exploration</h2>
-            <p class="muted" id="currentSubtitle">Aucun dossier charge</p>
+            <p class="muted" id="currentSubtitle">Aucun dossier chargé.</p>
           </div>
           <div class="tag-list">
             <div class="tag"><span id="dirCount">0</span> dossiers</div>
-            <div class="tag"><span id="fileCount">0</span> medias</div>
+            <div class="tag"><span id="fileCount">0</span> médias</div>
           </div>
         </div>
 
@@ -149,7 +149,7 @@
         </div>
         <div id="directoriesList" class="content-grid"></div>
         <div id="filesList" class="content-grid"></div>
-        <div id="emptyState" class="empty" hidden>Aucun media ou dossier trouve pour ce niveau.</div>
+        <div id="emptyState" class="empty" hidden>Aucun média ou dossier trouvé à ce niveau.</div>
       </div>
 
       <div id="libraryContent">
@@ -159,33 +159,64 @@
           </div>
         </div>
         <div id="libraryList" class="content-grid"></div>
-        <div id="libraryEmptyState" class="empty">Lance une recherche dans la bibliothèque ou, s'il n'y a pas encore d'index, passe en mode explorer et sélectionne les dossiers à analyser.</div>
+        <div id="libraryEmptyState" class="empty">Lance une recherche dans la bibliothèque ou, s'il n'y a pas encore d'index, passe en mode explorateur et sélectionne les dossiers à analyser.</div>
       </div>
 
       <div id="visualizeContent" hidden>
         <div class="content-header">
-          <div>
-            <h2>Visualisation</h2>
-            <p class="muted">Visualisations et analyse de Track.</p>
-          </div>
         </div>
 
         <div class="card visualization-analysis-card">
           <div class="card-header">
-            <div class="section-title">Analyse emotionnelle</div>
-            <div id="visualizeConfidence" class="muted">Confiance 0%</div>
+            <div class="section-title">Analyse émotionnelle</div>
+            <div class="visualization-card-actions">
+              <div id="visualizeConfidence" class="muted">Confiance 0%</div>
+              <button class="icon-button visualization-card-toggle" id="visualizeCardsToggleBtn" type="button" aria-expanded="false" aria-label="Afficher ou masquer tous les détails d'analyse">
+                <span id="visualizeCardsToggleIcon" class="material-symbols-outlined" aria-hidden="true">unfold_more</span>
+              </button>
+            </div>
           </div>
-          <div id="visualizeElapsed" class="muted visualization-meta">0 ms analyses</div>
+          <div id="visualizeElapsed" class="muted visualization-meta">0 ms analysées</div>
+          <div class="emotion-wheel-panel">
+            <div class="emotion-wheel-wrapper">
+              <div class="emotion-wheel" id="emotionWheel" aria-label="Roue émotionnelle">
+                <div class="emotion-wheel-center" aria-hidden="true"></div>
+                <div class="emotion-wheel-crosshair emotion-wheel-crosshair-x" aria-hidden="true"></div>
+                <div class="emotion-wheel-crosshair emotion-wheel-crosshair-y" aria-hidden="true"></div>
+                <span class="emotion-wheel-label emotion-wheel-label-n" aria-hidden="true">Joie</span>
+                <span class="emotion-wheel-label emotion-wheel-label-ne" aria-hidden="true">Enthousiasme</span>
+                <span class="emotion-wheel-label emotion-wheel-label-e" aria-hidden="true">Anxiété</span>
+                <span class="emotion-wheel-label emotion-wheel-label-se" aria-hidden="true">Tristesse</span>
+                <span class="emotion-wheel-label emotion-wheel-label-s" aria-hidden="true">Mélancolie</span>
+                <span class="emotion-wheel-label emotion-wheel-label-sw" aria-hidden="true">Apaisement</span>
+                <span class="emotion-wheel-label emotion-wheel-label-w" aria-hidden="true">Sérénité</span>
+                <span class="emotion-wheel-label emotion-wheel-label-nw" aria-hidden="true">Contentement</span>
+                <div id="emotionWheelCursor" class="emotion-wheel-cursor" aria-hidden="true"></div>
+              </div>
+            </div>
+            <div class="emotion-wheel-side">
+              <div class="emotion-card emotion-card-spotlight">
+              <div class="emotion-card-header">
+                <strong class="emotion-card-title">Valence</strong>
+                <div class="emotion-bipolar-track emotion-card-header-track"><div id="visualizeBarHeaderValence" class="emotion-bipolar-fill is-perceived"></div></div>
+                <span id="visualizeTrackAverageValence" class="muted">0.00</span>
+              </div>
+              <p class="emotion-card-description">La couleur émotionnelle globale du morceau. Elle va du sombre et introspectif au lumineux et joyeux, et guide la direction émotionnelle.</p>
+              </div>
+            </div>
+          </div>
           <div class="visualization-grid" id="visualizationGrid">
             <div class="emotion-card">
               <div class="emotion-card-header">
-                <strong>Energy</strong>
-                <span id="visualizeInstantEnergy" class="muted">0.00</span>
+                <strong class="emotion-card-title">Énergie</strong>
+                <div class="emotion-bar-track emotion-card-header-track"><div id="visualizeBarPerceivedEnergy" class="emotion-bar-fill is-perceived"></div></div>
+                <span id="visualizeTrackAverageEnergy" class="muted">0.00</span>
+                <button class="icon-button emotion-card-toggle" type="button" aria-expanded="false" aria-controls="emotionDetailsEnergy" aria-label="Afficher ou masquer le détail Énergie">
+                  <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                </button>
               </div>
-              <div class="emotion-bars">
-                <div class="emotion-bar-row emotion-bar-row-long">
-                  <div class="emotion-bar-track"><div id="visualizeBarLongEnergy" class="emotion-bar-fill is-long"></div></div>
-                </div>
+              <p class="emotion-card-description">Le niveau d'intensité et de mouvement du morceau. Une musique énergique stimule et entraîne, tandis qu'une énergie faible apaise et ralentit.</p>
+              <div class="emotion-bars" id="emotionDetailsEnergy" hidden>
                 <div class="emotion-bar-row">
                   <span>Instant</span>
                   <div class="emotion-bar-track"><div id="visualizeBarInstantEnergy" class="emotion-bar-fill"></div></div>
@@ -196,18 +227,30 @@
                   <div class="emotion-bar-track"><div id="visualizeBarShortEnergy" class="emotion-bar-fill is-short"></div></div>
                   <span class="emotion-row-value" data-dimension="energy" data-scope="short">0.00</span>
                 </div>
+                <div class="emotion-bar-row">
+                  <span>Long</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarLongEnergy" class="emotion-bar-fill is-long"></div></div>
+                  <span class="emotion-row-value" data-dimension="energy" data-scope="long">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Moyenne</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarTrackEnergy" class="emotion-bar-fill is-track"></div></div>
+                  <span class="emotion-row-value" data-dimension="energy" data-scope="track">0.00</span>
+                </div>
               </div>
             </div>
 
             <div class="emotion-card">
               <div class="emotion-card-header">
-                <strong>Tension</strong>
-                <span id="visualizeInstantTension" class="muted">0.00</span>
+                <strong class="emotion-card-title">Tension</strong>
+                <div class="emotion-bar-track emotion-card-header-track"><div id="visualizeBarPerceivedTension" class="emotion-bar-fill is-perceived"></div></div>
+                <span id="visualizeTrackAverageTension" class="muted">0.00</span>
+                <button class="icon-button emotion-card-toggle" type="button" aria-expanded="false" aria-controls="emotionDetailsTension" aria-label="Afficher ou masquer le détail Tension">
+                  <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                </button>
               </div>
-              <div class="emotion-bars">
-                <div class="emotion-bar-row emotion-bar-row-long">
-                  <div class="emotion-bar-track"><div id="visualizeBarLongTension" class="emotion-bar-fill is-long"></div></div>
-                </div>
+              <p class="emotion-card-description">Le degré de nervosité ou de pression ressenti. Une tension élevée crée une sensation d'urgence ou d'agitation, alors qu'une tension faible apporte du relâchement.</p>
+              <div class="emotion-bars" id="emotionDetailsTension" hidden>
                 <div class="emotion-bar-row">
                   <span>Instant</span>
                   <div class="emotion-bar-track"><div id="visualizeBarInstantTension" class="emotion-bar-fill"></div></div>
@@ -218,18 +261,30 @@
                   <div class="emotion-bar-track"><div id="visualizeBarShortTension" class="emotion-bar-fill is-short"></div></div>
                   <span class="emotion-row-value" data-dimension="tension" data-scope="short">0.00</span>
                 </div>
+                <div class="emotion-bar-row">
+                  <span>Long</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarLongTension" class="emotion-bar-fill is-long"></div></div>
+                  <span class="emotion-row-value" data-dimension="tension" data-scope="long">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Moyenne</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarTrackTension" class="emotion-bar-fill is-track"></div></div>
+                  <span class="emotion-row-value" data-dimension="tension" data-scope="track">0.00</span>
+                </div>
               </div>
             </div>
 
             <div class="emotion-card">
               <div class="emotion-card-header">
-                <strong>Temperament</strong>
-                <span id="visualizeInstantTemperament" class="muted">0.00</span>
+                <strong class="emotion-card-title">Tempérament</strong>
+                <div class="emotion-bipolar-track emotion-card-header-track"><div id="visualizeBarPerceivedTemperament" class="emotion-bipolar-fill is-perceived"></div></div>
+                <span id="visualizeTrackAverageTemperament" class="muted">0.00</span>
+                <button class="icon-button emotion-card-toggle" type="button" aria-expanded="false" aria-controls="emotionDetailsTemperament" aria-label="Afficher ou masquer le détail Tempérament">
+                  <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                </button>
               </div>
-              <div class="emotion-bars">
-                <div class="emotion-bar-row emotion-bar-row-long">
-                  <div class="emotion-bipolar-track"><div id="visualizeBarLongTemperament" class="emotion-bipolar-fill is-long"></div></div>
-                </div>
+              <p class="emotion-card-description">La texture du son, entre douceur et agressivité. Certains morceaux sont chaleureux et enveloppants, d'autres plus tranchants et incisifs.</p>
+              <div class="emotion-bars" id="emotionDetailsTemperament" hidden>
                 <div class="emotion-bar-row">
                   <span>Instant</span>
                   <div class="emotion-bipolar-track"><div id="visualizeBarInstantTemperament" class="emotion-bipolar-fill"></div></div>
@@ -240,18 +295,30 @@
                   <div class="emotion-bipolar-track"><div id="visualizeBarShortTemperament" class="emotion-bipolar-fill is-short"></div></div>
                   <span class="emotion-row-value" data-dimension="temperament" data-scope="short">0.00</span>
                 </div>
+                <div class="emotion-bar-row">
+                  <span>Long</span>
+                  <div class="emotion-bipolar-track"><div id="visualizeBarLongTemperament" class="emotion-bipolar-fill is-long"></div></div>
+                  <span class="emotion-row-value" data-dimension="temperament" data-scope="long">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Moyenne</span>
+                  <div class="emotion-bipolar-track"><div id="visualizeBarTrackTemperament" class="emotion-bipolar-fill is-track"></div></div>
+                  <span class="emotion-row-value" data-dimension="temperament" data-scope="track">0.00</span>
+                </div>
               </div>
             </div>
 
             <div class="emotion-card">
               <div class="emotion-card-header">
-                <strong>Stability</strong>
-                <span id="visualizeInstantStability" class="muted">0.00</span>
+                <strong class="emotion-card-title">Stabilité</strong>
+                <div class="emotion-bar-track emotion-card-header-track"><div id="visualizeBarPerceivedStability" class="emotion-bar-fill is-perceived"></div></div>
+                <span id="visualizeTrackAverageStability" class="muted">0.00</span>
+                <button class="icon-button emotion-card-toggle" type="button" aria-expanded="false" aria-controls="emotionDetailsStability" aria-label="Afficher ou masquer le détail Stabilité">
+                  <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                </button>
               </div>
-              <div class="emotion-bars">
-                <div class="emotion-bar-row emotion-bar-row-long">
-                  <div class="emotion-bar-track"><div id="visualizeBarLongStability" class="emotion-bar-fill is-long"></div></div>
-                </div>
+              <p class="emotion-card-description">La régularité et la continuité de la musique. Une forte stabilité rassure par sa répétition, tandis qu'une faible stabilité introduit du changement et de l'imprévu.</p>
+              <div class="emotion-bars" id="emotionDetailsStability" hidden>
                 <div class="emotion-bar-row">
                   <span>Instant</span>
                   <div class="emotion-bar-track"><div id="visualizeBarInstantStability" class="emotion-bar-fill"></div></div>
@@ -262,8 +329,19 @@
                   <div class="emotion-bar-track"><div id="visualizeBarShortStability" class="emotion-bar-fill is-short"></div></div>
                   <span class="emotion-row-value" data-dimension="stability" data-scope="short">0.00</span>
                 </div>
+                <div class="emotion-bar-row">
+                  <span>Long</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarLongStability" class="emotion-bar-fill is-long"></div></div>
+                  <span class="emotion-row-value" data-dimension="stability" data-scope="long">0.00</span>
+                </div>
+                <div class="emotion-bar-row">
+                  <span>Moyenne</span>
+                  <div class="emotion-bar-track"><div id="visualizeBarTrackStability" class="emotion-bar-fill is-track"></div></div>
+                  <span class="emotion-row-value" data-dimension="stability" data-scope="track">0.00</span>
+                </div>
               </div>
             </div>
+
           </div>
         </div>
       </div>
@@ -282,12 +360,12 @@
         </div>
 
         <div class="card now-playing">
-          <div class="section-title">Selection</div>
-          <h3 id="nowPlayingTitle">Aucun media selectionne</h3>
-          <button class="icon-button details-icon-toggle" id="detailsToggleBtn" type="button" aria-expanded="false" aria-label="Afficher ou masquer les details">
+          <div class="section-title">Sélection</div>
+          <h3 id="nowPlayingTitle">Aucun média sélectionné</h3>
+          <button class="icon-button details-icon-toggle" id="detailsToggleBtn" type="button" aria-expanded="false" aria-label="Afficher ou masquer les détails">
             <span id="detailsChevron" class="material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
           </button>
-          <div id="detailsPanel" class="details-panel muted" hidden>Les informations du fichier selectionne apparaitront ici.</div>
+          <div id="detailsPanel" class="details-panel muted" hidden>Les informations du fichier sélectionné apparaîtront ici.</div>
         </div>
 
         <div class="card playlists-card">
@@ -306,27 +384,27 @@
             <div class="playlist-header-top">
               <h3 class="playlist-title" id="currentPlaylistName">Playlist sans nom</h3>
               <div class="playlist-menu-wrap">
-                <button class="button ghost playlist-menu-trigger" id="playlistMenuBtn" type="button" aria-expanded="false" aria-label="Actions de playlist" title="Actions de playlist"><span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button>
+                <button class="button ghost playlist-menu-trigger" id="playlistMenuBtn" type="button" aria-expanded="false" aria-label="Actions de la playlist" title="Actions de la playlist"><span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button>
                 <div class="playlist-menu" id="playlistMenu" hidden>
-                  <button class="playlist-menu-item" id="editPlaylistBtn" type="button">Edit</button>
-                  <button class="playlist-menu-item" id="copyPlaylistJsonBtn" type="button">Copy JSON</button>
-                  <button class="playlist-menu-item" id="exportPlaylistBtn" type="button">Export</button>
-                  <button class="playlist-menu-item" id="importPlaylistBtn" type="button">Import</button>
+                  <button class="playlist-menu-item" id="editPlaylistBtn" type="button">Éditer</button>
+                  <button class="playlist-menu-item" id="copyPlaylistJsonBtn" type="button">Copier le JSON</button>
+                  <button class="playlist-menu-item" id="exportPlaylistBtn" type="button">Exporter</button>
+                  <button class="playlist-menu-item" id="importPlaylistBtn" type="button">Importer</button>
                 </div>
                 <input id="importPlaylistInput" type="file" accept="application/json,.json" hidden />
               </div>
             </div>
             <div class="playlist-toggle-group" style="display: flex;">
-              <button class="button ghost playlist-toggle-btn" id="playlistPlayBtn" type="button" title="Play">
+              <button class="button ghost playlist-toggle-btn" id="playlistPlayBtn" type="button" title="Lire">
                 <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
               </button>
-              <button class="button ghost playlist-toggle-btn" id="playlistSkipBtn" type="button" title="Skip">
+              <button class="button ghost playlist-toggle-btn" id="playlistSkipBtn" type="button" title="Passer">
                 <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
               </button>
-              <button style="margin-left: auto;" class="button ghost playlist-toggle-btn" id="playlistRandomBtn" type="button" aria-pressed="false" title="Random">
+              <button style="margin-left: auto;" class="button ghost playlist-toggle-btn" id="playlistRandomBtn" type="button" aria-pressed="false" title="Aléatoire">
                 <span class="material-symbols-outlined" aria-hidden="true">shuffle</span>
               </button>
-              <button class="button ghost playlist-toggle-btn" id="playlistRepeatBtn" type="button" aria-pressed="false" title="Repeat">
+              <button class="button ghost playlist-toggle-btn" id="playlistRepeatBtn" type="button" aria-pressed="false" title="Répéter">
                 <span class="material-symbols-outlined" id="playlistRepeatIcon" aria-hidden="true">repeat</span>
               </button>
             </div>
@@ -338,15 +416,17 @@
     </aside>
 
     <footer class="statusbar">
-      <span id="statusText" hidden>Pret.</span>
+      <span id="statusText" hidden>Prêt.</span>
       <div class="statusbar-player">
         <audio id="audioPlayer" controls preload="none"></audio>
+        <audio id="secondaryAudioPlayer" controls preload="metadata"></audio>
+        <audio id="tertiaryAudioPlayer" controls preload="metadata"></audio>
       </div>
       <div class="statusbar-actions">
         <button class="icon-button statusbar-action-btn" id="playerLikeBtn" type="button" aria-pressed="false" aria-label="Aimer la piste en cours" title="Aimer la piste en cours">
           <span class="material-symbols-outlined" aria-hidden="true">favorite</span>
         </button>
-        <button class="icon-button statusbar-action-btn" id="playerAddPlaylistBtn" type="button" aria-label="Ajouter la piste en cours a la playlist" title="Ajouter la piste en cours a la playlist">
+        <button class="icon-button statusbar-action-btn" id="playerAddPlaylistBtn" type="button" aria-label="Ajouter la piste en cours à la playlist" title="Ajouter la piste en cours à la playlist">
           <span class="material-symbols-outlined" aria-hidden="true">playlist_add</span>
         </button>
       </div>
@@ -358,18 +438,18 @@
   <div id="playlistEditModal" class="modal-backdrop" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="playlistEditTitle">
       <div class="modal-header">
-        <h3 id="playlistEditTitle">Edit Playlist</h3>
-        <button class="icon-button" id="closePlaylistEditBtn" type="button" aria-label="Close">
+        <h3 id="playlistEditTitle">Éditer la playlist</h3>
+        <button class="icon-button" id="closePlaylistEditBtn" type="button" aria-label="Fermer">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
         <label class="modal-field">
-          <span class="modal-label">Name</span>
+          <span class="modal-label">Nom</span>
           <input class="input" id="playlistNameInput" type="text" />
         </label>
         <label class="modal-field">
-          <span class="modal-label">Author</span>
+          <span class="modal-label">Auteur</span>
           <input class="input" id="playlistAuthorInput" type="text" />
         </label>
         <label class="modal-field">
@@ -378,8 +458,8 @@
         </label>
       </div>
       <div class="modal-actions">
-        <button class="button" id="cancelPlaylistEditBtn" type="button">Cancel</button>
-        <button class="button primary" id="savePlaylistEditBtn" type="button">Save</button>
+        <button class="button" id="cancelPlaylistEditBtn" type="button">Annuler</button>
+        <button class="button primary" id="savePlaylistEditBtn" type="button">Enregistrer</button>
       </div>
     </div>
   </div>
