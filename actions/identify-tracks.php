@@ -21,6 +21,7 @@ use moomuse\Track;
     ],
     'response' => [
         'content-type'  => 'application/json',
+        'charset'       => 'utf-8',
         'accept-origin' => '*'
     ],
     'providers' => ['context']

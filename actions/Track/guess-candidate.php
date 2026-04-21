@@ -63,8 +63,14 @@ try {
     ];
 
     if($bestMatch) {
+        $artist = $bestMatch['artist'] ?? null;
+
+        if(is_string($artist)) {
+            $artist = preg_replace('/^\d{1,3}\.\s*/', '', $artist);
+        }
+
         $values['title'] = $bestMatch['title'] ?? null;
-        $values['artist'] = $bestMatch['artist'] ?? null;
+        $values['artist'] = $artist;
         $values['album'] = $bestMatch['album'] ?? null;
         $values['status'] = 'candidate';
     }
