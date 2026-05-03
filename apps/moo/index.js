@@ -190,6 +190,7 @@ const CRON_INTERVAL_MS = 60000;
 const CROSSFADE_TRIGGER_SECONDS = 10;
 const CROSSFADE_DURATION_MS = 10000;
 const CROSSFADE_MIN_DURATION_MS = 1200;
+const NEXT_TRACK_WARMUP_BYTES = 1024 * 1024;
 const AUDIO_ANALYSIS_INTERVAL_MS = 40;
 const AUDIO_ANALYSIS_UI_INTERVAL_MS = 320;
 const AUDIO_ANALYSIS_SHORT_ALPHA = 0.08;
@@ -238,6 +239,9 @@ let audioAnalysisFrameId = 0;
 let audioAnalysisLastSampleAt = 0;
 let audioAnalysisLastUiUpdateAt = 0;
 let crossfadeAnimationFrameId = 0;
+let nextTrackWarmupController = null;
+let nextTrackWarmupPath = '';
+let nextTrackWarmupRequestId = 0;
 
 const audioAnalysis = {
   context: null,
@@ -280,7 +284,7 @@ const emotionWheelSelectionState = {
   radius: null,
   result: null
 };
-const EMOTION_WHEEL_DIRECTIONS = [
+const DEFAULT_EMOTION_WHEEL_DIRECTIONS = [
   'N',
   'N-NNE',
   'N-NE',
@@ -314,7 +318,7 @@ const EMOTION_WHEEL_DIRECTIONS = [
   'NW-N',
   'NNW-N'
 ];
-const EMOTION_WHEEL_MAP = {
+const DEFAULT_EMOTION_WHEEL_MAP = {
   N: { 1: 'bien-être', 2: 'plaisir', 3: 'joie' },
   'N-NNE': { 1: 'reconnaissance', 2: 'gratitude', 3: 'gratitude_profonde' },
   'N-NE': { 1: 'envie', 2: 'élan', 3: 'élan_vital' },
@@ -348,6 +352,30 @@ const EMOTION_WHEEL_MAP = {
   'NW-N': { 1: 'proximité', 2: 'attachement_stable', 3: 'lien_affectif' },
   'NNW-N': { 1: 'harmonie', 2: 'bien-être', 3: 'alignement' }
 };
+let EMOTION_WHEEL_DIRECTIONS = [...DEFAULT_EMOTION_WHEEL_DIRECTIONS];
+let EMOTION_WHEEL_MAP = { ...DEFAULT_EMOTION_WHEEL_MAP };
+
+async function loadEmotionWheelConfig() {
+  try {
+    const response = await fetch('./emotion-wheel.json', { cache: 'no-cache' });
+    if (!response.ok) {
+      throw new Error(`Unable to load emotion wheel config (${response.status}).`);
+    }
+
+    const payload = await response.json();
+    if (!payload || !Array.isArray(payload.directions) || typeof payload.map !== 'object') {
+      throw new Error('Emotion wheel config has an invalid shape.');
+    }
+
+    EMOTION_WHEEL_DIRECTIONS = [...payload.directions];
+    EMOTION_WHEEL_MAP = { ...payload.map };
+  }
+  catch (error) {
+    console.warn('Falling back to built-in emotion wheel config.', error);
+    EMOTION_WHEEL_DIRECTIONS = [...DEFAULT_EMOTION_WHEEL_DIRECTIONS];
+    EMOTION_WHEEL_MAP = { ...DEFAULT_EMOTION_WHEEL_MAP };
+  }
+}
 
 function normalizeLibrarySearchQuery(query) {
   const source = String(query || '').trim();
@@ -439,6 +467,78 @@ function clearAudioPlayer(player) {
   player.load();
 }
 
+function abortNextTrackWarmup() {
+  nextTrackWarmupRequestId += 1;
+
+  if (nextTrackWarmupController) {
+    nextTrackWarmupController.abort();
+  }
+
+  nextTrackWarmupController = null;
+  nextTrackWarmupPath = '';
+}
+
+function warmUpNextTrack(track) {
+  if (typeof fetch !== 'function') {
+    return;
+  }
+
+  const mediaUrl = buildMediaUrl(track);
+  const playbackPath = getTrackPlaybackPath(track);
+  if (!mediaUrl || !playbackPath) {
+    abortNextTrackWarmup();
+    return;
+  }
+
+  if (nextTrackWarmupPath === playbackPath) {
+    return;
+  }
+
+  abortNextTrackWarmup();
+
+  const requestId = nextTrackWarmupRequestId + 1;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const fetchOptions = {
+    credentials: 'same-origin',
+    headers: {
+      Range: `bytes=0-${NEXT_TRACK_WARMUP_BYTES - 1}`
+    }
+  };
+
+  if (controller) {
+    fetchOptions.signal = controller.signal;
+  }
+
+  nextTrackWarmupRequestId = requestId;
+  nextTrackWarmupController = controller;
+  nextTrackWarmupPath = playbackPath;
+
+  fetch(mediaUrl, fetchOptions)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`next_track_warmup_failed_${response.status}`);
+      }
+
+      return response.arrayBuffer();
+    })
+    .catch((error) => {
+      if (error?.name === 'AbortError') {
+        return;
+      }
+
+      console.error(error);
+
+      if (requestId === nextTrackWarmupRequestId) {
+        nextTrackWarmupPath = '';
+      }
+    })
+    .finally(() => {
+      if (requestId === nextTrackWarmupRequestId) {
+        nextTrackWarmupController = null;
+      }
+    });
+}
+
 function stopCrossfadeAnimation() {
   if (!crossfadeAnimationFrameId) {
     return;
@@ -450,6 +550,7 @@ function stopCrossfadeAnimation() {
 
 function cancelCrossfade() {
   stopCrossfadeAnimation();
+  abortNextTrackWarmup();
   state.crossfadeInProgress = false;
   state.crossfadePlayerStarted = false;
   const fadingPlayer = getFadingAudioPlayer();
@@ -499,7 +600,7 @@ function getPlaylistIndexAtOffset(offset) {
   return ((rawIndex % length) + length) % length;
 }
 
-function loadTrackIntoPlayer(player, track, playlistIndex) {
+function loadTrackIntoPlayer(player, track, playlistIndex, preload = 'metadata') {
   if (!player || !track) {
     clearAudioPlayer(player);
     return false;
@@ -512,10 +613,18 @@ function loadTrackIntoPlayer(player, track, playlistIndex) {
     return false;
   }
 
-  if (player.dataset.path !== playbackPath) {
+  const sourceChanged = player.dataset.path !== playbackPath;
+  if (player.preload !== preload) {
+    player.preload = preload;
+  }
+
+  if (sourceChanged) {
     player.src = mediaUrl;
     player.dataset.path = playbackPath;
     player.dataset.playlistIndex = String(playlistIndex);
+    player.load();
+  }
+  else if (preload === 'auto' && player.readyState < (player.HAVE_FUTURE_DATA || 3)) {
     player.load();
   }
   else {
@@ -544,6 +653,7 @@ function rebuildUpcomingPlayers() {
   state.queuedPlaylistIndex = -1;
   state.bufferTrack = null;
   state.bufferPlaylistIndex = -1;
+  abortNextTrackWarmup();
 
   inactiveKeys.forEach((key) => {
     clearAudioPlayer(getAudioPlayerByKey(key));
@@ -563,25 +673,28 @@ function prepareUpcomingTracks() {
   const queuedIndex = getPlaylistIndexAtOffset(1);
   if (queuedIndex >= 0) {
     const queuedTrack = getFileFromRegistry(state.playlist[queuedIndex]);
-    if (queuedTrack && loadTrackIntoPlayer(getQueuedAudioPlayer(), queuedTrack, queuedIndex)) {
+    if (queuedTrack && loadTrackIntoPlayer(getQueuedAudioPlayer(), queuedTrack, queuedIndex, 'auto')) {
       state.queuedTrack = queuedTrack;
       state.queuedPlaylistIndex = queuedIndex;
+      warmUpNextTrack(queuedTrack);
     }
     else {
       state.queuedTrack = null;
       state.queuedPlaylistIndex = -1;
+      abortNextTrackWarmup();
     }
   }
   else {
     state.queuedTrack = null;
     state.queuedPlaylistIndex = -1;
+    abortNextTrackWarmup();
     clearAudioPlayer(getQueuedAudioPlayer());
   }
 
   const bufferIndex = getPlaylistIndexAtOffset(2);
   if (bufferIndex >= 0) {
     const bufferTrack = getFileFromRegistry(state.playlist[bufferIndex]);
-    if (bufferTrack && loadTrackIntoPlayer(getBufferAudioPlayer(), bufferTrack, bufferIndex)) {
+    if (bufferTrack && loadTrackIntoPlayer(getBufferAudioPlayer(), bufferTrack, bufferIndex, 'metadata')) {
       state.bufferTrack = bufferTrack;
       state.bufferPlaylistIndex = bufferIndex;
     }
@@ -3404,6 +3517,13 @@ function startCrossfadeToPreparedTrack() {
     state.queuedPlaylistIndex = state.bufferPlaylistIndex;
     state.bufferTrack = null;
     state.bufferPlaylistIndex = -1;
+    if (state.queuedTrack) {
+      loadTrackIntoPlayer(getQueuedAudioPlayer(), state.queuedTrack, state.queuedPlaylistIndex, 'auto');
+      warmUpNextTrack(state.queuedTrack);
+    }
+    else {
+      abortNextTrackWarmup();
+    }
     syncAudioPlayerVisibility();
     renderPlayerUiOnly();
     renderPlaylist();
@@ -4137,43 +4257,47 @@ themeMediaQuery.addEventListener('change', () => {
   }
 });
 
-window.mooEmotionWheel = {
-  directions: EMOTION_WHEEL_DIRECTIONS,
-  emotionMap: EMOTION_WHEEL_MAP,
-  normalizeAngleDegrees,
-  clampNormalizedRadius,
-  getWheelLevelFromRadius,
-  getEmotionFromWheelPosition,
-  getWheelPositionFromEmotion
-};
-
-applyTheme();
-loadSavedPlaylists();
-loadCurrentPlaylist();
-loadActivePlaylistId();
-if (state.activeSavedPlaylistId && state.activeSavedPlaylistId !== 'current') {
-  if (!openSavedPlaylistById(state.activeSavedPlaylistId, { silent: true })) {
-    state.activeSavedPlaylistId = 'current';
-    persistActivePlaylistId();
-  }
+function exposeEmotionWheelApi() {
+  window.mooEmotionWheel = {
+    directions: EMOTION_WHEEL_DIRECTIONS,
+    emotionMap: EMOTION_WHEEL_MAP,
+    normalizeAngleDegrees,
+    clampNormalizedRadius,
+    getWheelLevelFromRadius,
+    getEmotionFromWheelPosition,
+    getWheelPositionFromEmotion
+  };
 }
-syncDetailsVisibility();
-syncPlaylistsVisibility();
-syncContentFilterButtons();
-syncPlaylistModeButtons();
-syncPlayerActions();
-syncAudioPlayerVisibility();
-initEmotionCardToggles();
-syncVisualizationTrack(state.currentTrack);
-renderSavedPlaylists();
-renderPlaylist();
-switchMode('library');
-loadDrives();
-window.addEventListener('load', startCronPolling, { once: true });
 
+async function bootstrapApp() {
+  await loadEmotionWheelConfig();
+  exposeEmotionWheelApi();
+  applyTheme();
+  loadSavedPlaylists();
+  loadCurrentPlaylist();
+  loadActivePlaylistId();
+  if (state.activeSavedPlaylistId && state.activeSavedPlaylistId !== 'current') {
+    if (!openSavedPlaylistById(state.activeSavedPlaylistId, { silent: true })) {
+      state.activeSavedPlaylistId = 'current';
+      persistActivePlaylistId();
+    }
+  }
+  syncDetailsVisibility();
+  syncPlaylistsVisibility();
+  syncContentFilterButtons();
+  syncPlaylistModeButtons();
+  syncPlayerActions();
+  syncAudioPlayerVisibility();
+  initEmotionCardToggles();
+  syncVisualizationTrack(state.currentTrack);
+  renderSavedPlaylists();
+  renderPlaylist();
+  switchMode('library');
+  loadDrives();
+  window.addEventListener('load', startCronPolling, { once: true });
+}
 
-
-
+bootstrapApp();
 
 
 
